@@ -1,7 +1,10 @@
 ---
 name: workflow-issues
 description: Gerenciamento completo do ciclo de vida de issues de desenvolvimento — criação, implementação, validação, feedback e finalização. Use quando o usuário pedir para criar, mover, listar, implementar ou gerenciar issues de um projeto.
-compatibility: opencode
+compatibility:
+  - opencode
+  - claude-code
+  - github-copilot
 ---
 
 # Workflow de Gerenciamento de Issues
@@ -9,7 +12,7 @@ compatibility: opencode
 ## Estrutura de Pastas
 
 ```
-.opencode/
+.project/
 ├── docs/                        # Documentação do projeto e workflows
 │
 ├── analises/                    # Análises de demandas (DDP)
@@ -26,7 +29,7 @@ compatibility: opencode
     └── executed/                # Finalizadas e aprovadas
 ```
 
-> **Importante:** A pasta `.opencode/` deve ser adicionada ao `.gitignore` do projeto.
+> **Importante:** A pasta `.project/` deve ser adicionada ao `.gitignore` do projeto.
 
 ---
 
@@ -57,7 +60,7 @@ compatibility: opencode
 
 ### 1. Criação da Issue (Backlog)
 
-- Criar arquivo `issue-XXX-descricao-curta.md` em `.opencode/issues/backlog/`
+- Criar arquivo `issue-XXX-descricao-curta.md` em `.project/issues/backlog/`
 - Usar numeração sequencial (001, 002, 003...)
 - Seguir o template padrão (ver abaixo)
 
@@ -172,16 +175,16 @@ Alta | Média | Baixa
 
 ```bash
 # Após implementar -> aguardando validação
-mv .opencode/issues/backlog/issue-XXX-*.md .opencode/issues/pending-validation/
+mv .project/issues/backlog/issue-XXX-*.md .project/issues/pending-validation/
 
 # Após feedback -> precisa ajustes
-mv .opencode/issues/pending-validation/issue-XXX-*.md .opencode/issues/validation-feedback/
+mv .project/issues/pending-validation/issue-XXX-*.md .project/issues/validation-feedback/
 
 # Após ajustes -> aguardando nova validação
-mv .opencode/issues/validation-feedback/issue-XXX-*.md .opencode/issues/pending-validation/
+mv .project/issues/validation-feedback/issue-XXX-*.md .project/issues/pending-validation/
 
 # Após aprovação final -> concluída
-mv .opencode/issues/pending-validation/issue-XXX-*.md .opencode/issues/executed/
+mv .project/issues/pending-validation/issue-XXX-*.md .project/issues/executed/
 ```
 
 ---
@@ -195,7 +198,7 @@ mv .opencode/issues/pending-validation/issue-XXX-*.md .opencode/issues/executed/
 5. **SEMPRE** rodar build antes de mover para `pending-validation/`
 6. **SEMPRE** marcar checkboxes dos critérios de aceite conforme implementa
 7. **SEMPRE** criar a estrutura padrão de pastas no projeto, caso não exista
-8. **SEMPRE** adicionar `.opencode/` ao `.gitignore` do projeto, caso ainda não esteja listado
+8. **SEMPRE** adicionar `.project/` ao `.gitignore` do projeto, caso ainda não esteja listado
 
 ---
 
@@ -203,8 +206,8 @@ mv .opencode/issues/pending-validation/issue-XXX-*.md .opencode/issues/executed/
 
 ```bash
 # Contar issues por status
-echo "Backlog: $(ls -1 .opencode/issues/backlog/*.md 2>/dev/null | wc -l)"
-echo "Aguardando validação: $(ls -1 .opencode/issues/pending-validation/*.md 2>/dev/null | wc -l)"
-echo "Com feedback: $(ls -1 .opencode/issues/validation-feedback/*.md 2>/dev/null | wc -l)"
-echo "Executadas: $(ls -1 .opencode/issues/executed/*.md 2>/dev/null | wc -l)"
+echo "Backlog: $(ls -1 .project/issues/backlog/*.md 2>/dev/null | wc -l)"
+echo "Aguardando validação: $(ls -1 .project/issues/pending-validation/*.md 2>/dev/null | wc -l)"
+echo "Com feedback: $(ls -1 .project/issues/validation-feedback/*.md 2>/dev/null | wc -l)"
+echo "Executadas: $(ls -1 .project/issues/executed/*.md 2>/dev/null | wc -l)"
 ```

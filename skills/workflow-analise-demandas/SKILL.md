@@ -1,7 +1,10 @@
 ---
 name: workflow-analise-demandas
 description: Análise técnica de demandas seguindo o modelo DDP (Documento de Definição de Projeto) — recebe AS-IS e TO-BE, produz HOW-TO com estimativas, cronograma e riscos. Use quando o usuário pedir para analisar uma demanda, criar um HOW-TO, estimar esforço ou revisar um DDP.
-compatibility: opencode
+compatibility:
+  - opencode
+  - claude-code
+  - github-copilot
 ---
 
 # Workflow de Análise de Demandas (DDP)
@@ -23,7 +26,7 @@ O DDP é composto por três partes:
 ## Estrutura de Pastas
 
 ```
-.opencode/
+.project/
 ├── docs/                        # Documentação do projeto e workflows
 │
 ├── analises/                    # Análises de demandas (DDP)
@@ -40,7 +43,7 @@ O DDP é composto por três partes:
     └── executed/
 ```
 
-> **Importante:** A pasta `.opencode/` deve ser adicionada ao `.gitignore` do projeto.
+> **Importante:** A pasta `.project/` deve ser adicionada ao `.gitignore` do projeto.
 
 ---
 
@@ -75,7 +78,7 @@ O DDP é composto por três partes:
 **Gatilho:** Usuário envia documento com AS-IS e TO-BE preenchidos.
 
 **Ações do Agente:**
-1. Criar arquivo `analise-XXX-descricao-curta.md` em `.opencode/analises/received/`
+1. Criar arquivo `analise-XXX-descricao-curta.md` em `.project/analises/received/`
 2. Validar completude das informações recebidas (ver checklist abaixo)
 3. Se incompleto: solicitar informações faltantes ao usuário
 4. Se completo: mover para `in-analysis/`
@@ -213,19 +216,19 @@ O DDP é composto por três partes:
 
 ```bash
 # Demanda recebida -> iniciar análise
-mv .opencode/analises/received/analise-XXX-*.md .opencode/analises/in-analysis/
+mv .project/analises/received/analise-XXX-*.md .project/analises/in-analysis/
 
 # Análise concluída -> aguardando revisão
-mv .opencode/analises/in-analysis/analise-XXX-*.md .opencode/analises/pending-review/
+mv .project/analises/in-analysis/analise-XXX-*.md .project/analises/pending-review/
 
 # Revisão com feedback -> voltar para análise
-mv .opencode/analises/pending-review/analise-XXX-*.md .opencode/analises/in-analysis/
+mv .project/analises/pending-review/analise-XXX-*.md .project/analises/in-analysis/
 
 # Revisão aprovada -> aprovada
-mv .opencode/analises/pending-review/analise-XXX-*.md .opencode/analises/approved/
+mv .project/analises/pending-review/analise-XXX-*.md .project/analises/approved/
 
 # Aprovada -> pronta para desenvolvimento
-mv .opencode/analises/approved/analise-XXX-*.md .opencode/analises/ready-for-dev/
+mv .project/analises/approved/analise-XXX-*.md .project/analises/ready-for-dev/
 ```
 
 ---
@@ -239,7 +242,7 @@ mv .opencode/analises/approved/analise-XXX-*.md .opencode/analises/ready-for-dev
 5. **SEMPRE** incluir estimativas baseadas em evidências (comparação com projetos similares)
 6. **SEMPRE** criar a estrutura padrão de pastas no projeto, caso não exista
 7. **SEMPRE** perguntar ao usuário quando houver ambiguidade nas regras de negócio
-8. **SEMPRE** adicionar `.opencode/` ao `.gitignore` do projeto, caso ainda não esteja listado
+8. **SEMPRE** adicionar `.project/` ao `.gitignore` do projeto, caso ainda não esteja listado
 
 ---
 
@@ -248,7 +251,7 @@ mv .opencode/analises/approved/analise-XXX-*.md .opencode/analises/ready-for-dev
 Após uma análise ser movida para `ready-for-dev/`:
 
 1. O levantamento de funcionalidades pode ser convertido em issues
-2. Cada módulo/componente pode virar uma ou mais issues em `.opencode/issues/backlog/`
+2. Cada módulo/componente pode virar uma ou mais issues em `.project/issues/backlog/`
 3. Seguir a skill `workflow-issues` para gerenciamento das issues criadas
 
 ---
@@ -257,9 +260,9 @@ Após uma análise ser movida para `ready-for-dev/`:
 
 ```bash
 # Contar análises por status
-echo "Recebidas: $(ls -1 .opencode/analises/received/*.md 2>/dev/null | wc -l)"
-echo "Em análise: $(ls -1 .opencode/analises/in-analysis/*.md 2>/dev/null | wc -l)"
-echo "Aguardando revisão: $(ls -1 .opencode/analises/pending-review/*.md 2>/dev/null | wc -l)"
-echo "Aprovadas: $(ls -1 .opencode/analises/approved/*.md 2>/dev/null | wc -l)"
-echo "Prontas para dev: $(ls -1 .opencode/analises/ready-for-dev/*.md 2>/dev/null | wc -l)"
+echo "Recebidas: $(ls -1 .project/analises/received/*.md 2>/dev/null | wc -l)"
+echo "Em análise: $(ls -1 .project/analises/in-analysis/*.md 2>/dev/null | wc -l)"
+echo "Aguardando revisão: $(ls -1 .project/analises/pending-review/*.md 2>/dev/null | wc -l)"
+echo "Aprovadas: $(ls -1 .project/analises/approved/*.md 2>/dev/null | wc -l)"
+echo "Prontas para dev: $(ls -1 .project/analises/ready-for-dev/*.md 2>/dev/null | wc -l)"
 ```

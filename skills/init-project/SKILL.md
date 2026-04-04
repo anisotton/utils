@@ -1,6 +1,6 @@
 ---
 name: init-project
-description: Inicializa o projeto com seleção de provider, estrutura de workflows e análise completa
+description: Inicializa o projeto com seleção de CLI, provider, estrutura de workflows e análise completa
 compatibility:
   - opencode
   - claude-code
@@ -9,23 +9,52 @@ compatibility:
 
 # /init - Inicialização de Projeto
 
-Comando para configurar e inicializar projetos no OpenCode com oh-my-opencode.
+Comando para configurar e inicializar projetos com estrutura de workflows, instruções de agente e análise completa.
 
 ## O que este comando faz
 
-1. **Seleciona o provider** - Pergunta qual provider usar e cria `.opencode/oh-my-opencode.json` no projeto
-2. **Cria estrutura de workflows** - Pasta `.opencode/` com subpastas de issues e análises
-3. **Configura .gitignore** - Adiciona `.opencode/` ao .gitignore do projeto
-4. **Analisa o projeto** - Identifica tecnologias, estrutura, funcionalidades e gera documentação
-5. **Gera PROJETO.md** - Documento operacional completo em `.opencode/docs/PROJETO.md`
+1. **Identifica o CLI** - Pergunta qual ferramenta de IA o usuário está utilizando (OpenCode ou Claude Code)
+2. **Seleciona o provider** (apenas OpenCode) - Pergunta qual provider usar e cria `.opencode/oh-my-opencode.json`
+3. **Cria estrutura de workflows** - Pasta `.project/` com subpastas de issues e análises
+4. **Gera instruções de agente** - `AGENTS.md` (OpenCode) ou `CLAUDE.md` (Claude Code) na raiz do projeto
+5. **Configura .gitignore** - Adiciona `.project/` ao .gitignore do projeto
+6. **Analisa o projeto** - Identifica tecnologias, estrutura, funcionalidades e gera documentação
+7. **Gera PROJETO.md** - Documento operacional completo em `.project/docs/PROJETO.md`
 
 ---
 
 ## Workflow de Execução
 
-### Etapa 1: Seleção de Provider
+### Etapa 0: Identificação do CLI
 
-**ANTES de qualquer outra ação**, perguntar ao usuário qual provider deseja utilizar neste projeto.
+**ANTES de qualquer outra ação**, identificar qual ferramenta de IA o usuário está utilizando.
+
+Usar a ferramenta `question` para coletar:
+
+```
+question({
+  questions: [
+    {
+      header: "CLI de IA",
+      question: "Qual ferramenta de IA você está utilizando neste projeto?",
+      options: [
+        { label: "OpenCode", description: "OpenCode CLI (oh-my-opencode)" },
+        { label: "Claude Code", description: "Claude Code CLI (Anthropic)" }
+      ]
+    }
+  ]
+})
+```
+
+Armazenar a resposta como `CLI_CHOICE` para usar nas etapas seguintes.
+
+---
+
+### Etapa 1: Seleção de Provider (apenas OpenCode)
+
+**Executar SOMENTE se `CLI_CHOICE = OpenCode`.**
+
+Se `CLI_CHOICE = Claude Code`, pular esta etapa inteiramente e ir para a Etapa 2.
 
 Usar a ferramenta `question` para coletar a preferência:
 
@@ -140,11 +169,9 @@ question({
 Verificar e criar (se necessário) a estrutura completa:
 
 ```
-.opencode/
-├── oh-my-opencode.json          # Criado/atualizado na Etapa 1
-├── .gitignore                   # Ignora arquivos gerados pelo OpenCode
+.project/
 ├── docs/                        # Documentação do projeto
-│   └── PROJETO.md               # Gerado na Etapa 4
+│   └── PROJETO.md               # Gerado na Etapa 5
 │
 ├── issues/                      # Workflow de issues
 │   ├── backlog/
@@ -160,10 +187,25 @@ Verificar e criar (se necessário) a estrutura completa:
     └── ready-for-dev/
 ```
 
+**Se `CLI_CHOICE = OpenCode`**, criar também a pasta `.opencode/` para configurações específicas:
+
+```
+.opencode/
+├── oh-my-opencode.json          # Criado na Etapa 1
+└── .gitignore                   # Ignora node_modules/, package.json, bun.lock
+```
+
 ```bash
-mkdir -p .opencode/docs
-mkdir -p .opencode/issues/{backlog,pending-validation,validation-feedback,executed}
-mkdir -p .opencode/analises/{received,in-analysis,pending-review,approved,ready-for-dev}
+mkdir -p .project/docs
+mkdir -p .project/issues/{backlog,pending-validation,validation-feedback,executed}
+mkdir -p .project/analises/{received,in-analysis,pending-review,approved,ready-for-dev}
+
+grep -q "^\.project" .gitignore 2>/dev/null || echo ".project/" >> .gitignore
+```
+
+**Apenas se `CLI_CHOICE = OpenCode`:**
+```bash
+mkdir -p .opencode
 
 cat > .opencode/.gitignore << 'EOF'
 node_modules/
@@ -176,12 +218,74 @@ grep -q "^\.opencode" .gitignore 2>/dev/null || echo ".opencode/" >> .gitignore
 
 **Comportamento idempotente:**
 - Se pastas já existem: não sobrescrever
+- Se `.gitignore` já lista `.project/`: não duplicar
 - Se `.opencode/.gitignore` já existe: não sobrescrever
-- Se `.opencode/` já está no `.gitignore` do projeto: não duplicar
 
 ---
 
-### Etapa 3: Discovery e Análise (Paralelo)
+### Etapa 3: Geração do Arquivo de Instruções do Agente
+
+Conforme o CLI escolhido, gerar o arquivo de instruções na raiz do projeto.
+
+#### Se `CLI_CHOICE = OpenCode` → gerar `AGENTS.md`
+
+Criar `AGENTS.md` na raiz do projeto com a listagem de skills disponíveis:
+
+```markdown
+# Regras do Projeto
+
+## Skills disponíveis
+
+Use as skills abaixo invocando-as pelo nome quando o contexto for relevante:
+
+- **`workflow-issues`** — Gerenciar ciclo de vida de issues (criar, mover, validar, finalizar)
+- **`workflow-analise-demandas`** — Análise técnica de demandas DDP (AS-IS + TO-BE → HOW-TO)
+- **`check-documentation`** — Consultar documentação oficial de tecnologias do projeto
+- **`laravel-dusk`** — Testes end-to-end com Laravel Dusk
+- **`interface-design`** — Design de interfaces (dashboards, painéis, apps)
+- **`init-project`** — Inicializar projeto com estrutura de workflows e análise
+
+## Estrutura de Workflows
+
+- Issues: `.project/issues/` (backlog → pending-validation → validation-feedback → executed)
+- Análises: `.project/analises/` (received → in-analysis → pending-review → approved → ready-for-dev)
+- Documentação: `.project/docs/PROJETO.md`
+```
+
+**Se já existir `AGENTS.md`**, perguntar se deseja sobrescrever ou fazer merge.
+
+#### Se `CLI_CHOICE = Claude Code` → gerar `CLAUDE.md`
+
+Criar `CLAUDE.md` na raiz do projeto:
+
+```markdown
+# Regras do Projeto
+
+## Skills disponíveis
+
+Use as skills abaixo invocando-as pelo nome quando o contexto for relevante:
+
+- **`workflow-issues`** — Gerenciar ciclo de vida de issues (criar, mover, validar, finalizar)
+- **`workflow-analise-demandas`** — Análise técnica de demandas DDP (AS-IS + TO-BE → HOW-TO)
+- **`check-documentation`** — Consultar documentação oficial de tecnologias do projeto
+- **`laravel-dusk`** — Testes end-to-end com Laravel Dusk
+- **`interface-design`** — Design de interfaces (dashboards, painéis, apps)
+- **`init-project`** — Inicializar projeto com estrutura de workflows e análise
+
+## Estrutura de Workflows
+
+- Issues: `.project/issues/` (backlog → pending-validation → validation-feedback → executed)
+- Análises: `.project/analises/` (received → in-analysis → pending-review → approved → ready-for-dev)
+- Documentação: `.project/docs/PROJETO.md`
+```
+
+**Se já existir `CLAUDE.md`**, perguntar se deseja sobrescrever ou fazer merge.
+
+> **Nota:** O conteúdo base é o mesmo para ambos os CLIs. A diferença é o nome do arquivo (`AGENTS.md` vs `CLAUDE.md`) pois cada CLI lê seu respectivo arquivo automaticamente.
+
+---
+
+### Etapa 4: Discovery e Análise (Paralelo)
 
 **Disparar agentes explore em background IMEDIATAMENTE:**
 
@@ -212,7 +316,7 @@ git remote -v 2>/dev/null
 
 ---
 
-### Etapa 4: Geração do PROJETO.md
+### Etapa 5: Geração do PROJETO.md
 
 **Coletar resultados dos agentes:**
 
@@ -220,7 +324,7 @@ git remote -v 2>/dev/null
 for each task_id: background_output(task_id="...")
 ```
 
-**Consolidar informações e criar `.opencode/docs/PROJETO.md`** usando o template abaixo.
+**Consolidar informações e criar `.project/docs/PROJETO.md`** usando o template abaixo.
 
 Se já existir PROJETO.md:
 - Perguntar se deseja atualizar ou manter o atual (a menos que `--force`)
@@ -230,7 +334,7 @@ Se já existir PROJETO.md:
 ```markdown
 # Projeto: {nome do projeto}
 
-> Documento operacional para agentes OpenCode. Referência principal para trabalhar neste repositório.
+> Documento operacional para agentes de IA. Referência principal para trabalhar neste repositório.
 > Prioriza "como executar e como não quebrar" sobre descrições genéricas.
 
 **Gerado em:** {DATA_ATUAL}
@@ -325,50 +429,77 @@ Se já existir PROJETO.md:
 
 ---
 
-## Workflows OpenCode
+## Workflows do Projeto
 
 ### Issues
 Fluxo: `backlog/` → `pending-validation/` → `validation-feedback/` → `executed/`
-Localização: `.opencode/issues/`
+Localização: `.project/issues/`
 
 ### Análises (DDP)
 Fluxo: `received/` → `in-analysis/` → `pending-review/` → `approved/` → `ready-for-dev/`
-Localização: `.opencode/analises/`
+Localização: `.project/analises/`
 
 ---
 
-*Gerado automaticamente pelo comando `/init` do OpenCode*
+*Gerado automaticamente pelo comando `/init`*
 ```
 
 ---
 
-### Etapa 5: Relatório Final
+### Etapa 6: Relatório Final
 
 Apresentar ao usuário:
 
+**Se `CLI_CHOICE = OpenCode`:**
 ```
 === /init Concluído ===
 
+CLI: OpenCode
 Projeto: {nome do projeto}
 Tech Stack: {resumo}
-Provider: {provider selecionado} → .opencode/oh-my-opencode.json
+Provider: {provider selecionado}
 
 Estruturas:
   [OK] .opencode/oh-my-opencode.json criado ({provider})
-  [OK] .opencode/docs/PROJETO.md criado
-  [OK] .opencode/issues/ configurado
-  [OK] .opencode/analises/ configurado
-  [OK] .opencode/.gitignore criado
+  [OK] AGENTS.md criado na raiz do projeto
+  [OK] .project/docs/PROJETO.md criado
+  [OK] .project/issues/ configurado
+  [OK] .project/analises/ configurado
   [OK] .gitignore atualizado
 
 Funcionalidades identificadas: {N}
 Comandos mapeados: {lista}
 
 Próximos passos:
-  - Revisar .opencode/docs/PROJETO.md
+  - Revisar .project/docs/PROJETO.md
+  - Revisar AGENTS.md e adicionar regras específicas do projeto
   - Rodar /init-deep para gerar AGENTS.md hierárquico (recomendado para projetos grandes)
-  - Criar issues em .opencode/issues/backlog/
+  - Criar issues em .project/issues/backlog/
   - Usar /start-work para começar desenvolvimento
+```
+
+**Se `CLI_CHOICE = Claude Code`:**
+```
+=== /init Concluído ===
+
+CLI: Claude Code
+Projeto: {nome do projeto}
+Tech Stack: {resumo}
+
+Estruturas:
+  [OK] CLAUDE.md criado na raiz do projeto
+  [OK] .project/docs/PROJETO.md criado
+  [OK] .project/issues/ configurado
+  [OK] .project/analises/ configurado
+  [OK] .gitignore atualizado
+
+Funcionalidades identificadas: {N}
+Comandos mapeados: {lista}
+
+Próximos passos:
+  - Revisar .project/docs/PROJETO.md
+  - Revisar CLAUDE.md e adicionar regras específicas do projeto
+  - Criar issues em .project/issues/backlog/
 ```
 
 ---
@@ -378,24 +509,26 @@ Próximos passos:
 | Flag | Descrição |
 |------|-----------|
 | `--force` | Recria estruturas e arquivos mesmo se existirem (com confirmação) |
-| `--skip-analysis` | Cria estruturas e configura provider, sem análise profunda nem PROJETO.md |
-| `--update` | Atualiza apenas PROJETO.md e oh-my-opencode.json, mantém estruturas |
+| `--skip-analysis` | Cria estruturas e configura CLI, sem análise profunda nem PROJETO.md |
+| `--update` | Atualiza apenas PROJETO.md e instruções do agente, mantém estruturas |
 
 ---
 
 ## Regras Importantes
 
-1. **SEMPRE** perguntar o provider antes de iniciar
-2. **NUNCA** editar o oh-my-opencode.json GLOBAL (`~/.config/opencode/`) — apenas o local do projeto (`.opencode/`)
-3. **SEMPRE** ler o oh-my-opencode.json global como base para gerar o local
-4. **NUNCA** sobrescrever arquivos existentes sem confirmação (exceto com `--force`)
-5. **SEMPRE** verificar estruturas existentes antes de criar
-6. **SEMPRE** adicionar `.opencode/` ao `.gitignore` do projeto
-7. **SEMPRE** criar `.opencode/.gitignore` com `node_modules/`, `package.json` e `bun.lock`
-8. **SEMPRE** usar TodoWrite para rastrear progresso das etapas
-9. **SEMPRE** coletar resultados dos agentes background antes de gerar PROJETO.md
-10. **SEMPRE** apresentar relatório final ao usuário
-11. **SEMPRE** sugerir `/init-deep` no final para projetos com muitos módulos
+1. **SEMPRE** perguntar o CLI antes de qualquer outra ação
+2. **SEMPRE** perguntar o provider antes de iniciar (apenas OpenCode)
+3. **NUNCA** editar o oh-my-opencode.json GLOBAL (`~/.config/opencode/`) — apenas o local do projeto (`.opencode/`)
+4. **SEMPRE** ler o oh-my-opencode.json global como base para gerar o local (apenas OpenCode)
+5. **NUNCA** sobrescrever arquivos existentes sem confirmação (exceto com `--force`)
+6. **SEMPRE** verificar estruturas existentes antes de criar
+7. **SEMPRE** adicionar `.project/` ao `.gitignore` do projeto
+8. **SEMPRE** adicionar `.opencode/` ao `.gitignore` do projeto (apenas OpenCode)
+9. **SEMPRE** gerar o arquivo de instruções correto: `AGENTS.md` para OpenCode, `CLAUDE.md` para Claude Code
+10. **SEMPRE** usar TodoWrite para rastrear progresso das etapas
+11. **SEMPRE** coletar resultados dos agentes background antes de gerar PROJETO.md
+12. **SEMPRE** apresentar relatório final ao usuário
+13. **SEMPRE** sugerir `/init-deep` no final para projetos com muitos módulos (apenas OpenCode)
 
 ---
 
@@ -403,11 +536,13 @@ Próximos passos:
 
 ```
 TodoWrite([
-  { content: "Selecionar provider e criar .opencode/oh-my-opencode.json do projeto", status: "pending", priority: "high" },
-  { content: "Criar estrutura .opencode/ com workflows e .gitignore", status: "pending", priority: "high" },
+  { content: "Identificar CLI (OpenCode ou Claude Code)", status: "pending", priority: "high" },
+  { content: "Selecionar provider e criar .opencode/oh-my-opencode.json (se OpenCode)", status: "pending", priority: "high" },
+  { content: "Criar estrutura .project/ com workflows", status: "pending", priority: "high" },
+  { content: "Gerar arquivo de instruções do agente (AGENTS.md ou CLAUDE.md)", status: "pending", priority: "high" },
   { content: "Disparar agentes explore para análise do projeto", status: "pending", priority: "high" },
-  { content: "Coletar resultados e gerar .opencode/docs/PROJETO.md", status: "pending", priority: "high" },
+  { content: "Coletar resultados e gerar .project/docs/PROJETO.md", status: "pending", priority: "high" },
   { content: "Verificar/atualizar .gitignore do projeto", status: "pending", priority: "medium" },
-  { content: "Apresentar relatório final e sugerir /init-deep", status: "pending", priority: "medium" }
+  { content: "Apresentar relatório final", status: "pending", priority: "medium" }
 ])
 ```
