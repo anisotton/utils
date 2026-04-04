@@ -6,17 +6,24 @@
 # Este script automatiza a instalação e configuração do ambiente de
 # desenvolvimento para Ubuntu. Os seguintes softwares serão instalados:
 #
-#  1.  Google Chrome          - Navegador web
-#  2.  Zsh + Oh My Zsh        - Shell aprimorado com plugins
-#  3.  NVM + Node.js LTS      - Gerenciador de versões Node.js
-#  4.  PHP + Composer         - Linguagem PHP e gerenciador de dependências
-#  5.  Docker + Docker Compose- Containerização
-#  6.  Valet Linux            - Ambiente de desenvolvimento PHP local
-#  7.  Takeout                - Gerenciador de serviços Docker (MySQL, Redis, etc.)
-#  8.  Micro                  - Editor de texto moderno para terminal
-#  9.  VS Code Insiders       - Editor de código
-# 10.  DBeaver                - Cliente de banco de dados universal
-# 11.  ApiDog                 - Cliente de API (alternativa ao Postman)
+# Pré-requisitos (instalados automaticamente):
+#  - git, curl, wget, unzip, build-essential, libssl-dev, lsof
+#
+# Softwares:
+#  1.  Google Chrome           - Navegador web
+#  2.  Zsh + Oh My Zsh         - Shell aprimorado com plugins
+#  3.  NVM + Node.js LTS       - Gerenciador de versões Node.js
+#  4.  PHP + Composer           - Linguagem PHP e gerenciador de dependências
+#  5.  Docker + Docker Compose  - Containerização
+#  6.  Valet Linux              - Ambiente de desenvolvimento PHP local
+#  7.  Takeout                  - Gerenciador de serviços Docker (MySQL, Redis, etc.)
+#  8.  Micro                    - Editor de texto moderno para terminal
+#  9.  VS Code Insiders         - Editor de código
+# 10.  DBeaver                  - Cliente de banco de dados universal
+# 11.  ApiDog                   - Cliente de API (alternativa ao Postman)
+# 12.  OpenCode                 - Agente de IA para coding no terminal (open-source)
+# 13.  Claude Code              - CLI de IA da Anthropic para coding no terminal
+# 14.  GitHub Copilot CLI       - Assistente de IA do GitHub para linha de comando
 #
 # Configurações adicionais:
 #  - Customização do Ubuntu Dock (posição, auto-hide, ícones)
@@ -97,6 +104,10 @@ run_as_user() {
 }
 
 log_info "Starting Ubuntu Development Setup..."
+
+# 0. Base prerequisites
+log_info "Checking base prerequisites..."
+ensure_packages git curl wget unzip build-essential libssl-dev lsof
 
 # 1. Google Chrome
 log_info "Checking Google Chrome..."
@@ -195,7 +206,13 @@ log_info "Checking NVM..."
 NVM_DIR="$REAL_HOME/.nvm"
 if [ ! -d "$NVM_DIR" ]; then
     log_warning "NVM not found. Installing..."
-    run_as_user "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash"
+    NVM_LATEST=$(curl -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -z "$NVM_LATEST" ]; then
+        log_warning "Could not fetch latest NVM version from GitHub API. Falling back to v0.40.4"
+        NVM_LATEST="v0.40.4"
+    fi
+    log_info "Installing NVM $NVM_LATEST..."
+    run_as_user "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_LATEST/install.sh | bash"
     
     if ! grep -q 'NVM_DIR' "$REAL_HOME/.zshrc" 2>/dev/null; then
         run_as_user "echo '' >> '$REAL_HOME/.zshrc'"
@@ -282,6 +299,26 @@ fi
 log_info "Checking Docker..."
 if ! command -v docker &> /dev/null; then
     log_warning "Docker not found. Installing..."
+
+    log_info "Removing conflicting Docker packages (if any)..."
+    CONFLICTING_PKGS=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
+    PKGS_TO_REMOVE=()
+    for pkg in "${CONFLICTING_PKGS[@]}"; do
+        if dpkg -s "$pkg" &>/dev/null; then
+            PKGS_TO_REMOVE+=("$pkg")
+        fi
+    done
+    if [ ${#PKGS_TO_REMOVE[@]} -gt 0 ]; then
+        log_warning "Removing conflicting packages: ${PKGS_TO_REMOVE[*]}"
+        if [ "$EUID" -eq 0 ]; then
+            apt-get remove -y "${PKGS_TO_REMOVE[@]}"
+        else
+            sudo apt-get remove -y "${PKGS_TO_REMOVE[@]}"
+        fi
+    else
+        log_info "No conflicting Docker packages found"
+    fi
+
     if [ "$EUID" -eq 0 ]; then
         apt-get update
         apt-get install -y ca-certificates curl gnupg
@@ -384,6 +421,23 @@ if ! run_as_user "command -v valet" &> /dev/null; then
     run_as_user "COMPOSER_ALLOW_SUPERUSER=1 composer global require cpriego/valet-linux --no-interaction"
     
     if run_as_user "export PATH=\"$COMPOSER_BIN:\$PATH\" && command -v valet" &> /dev/null; then
+        PORT80_PID=$(lsof -ti:80 2>/dev/null || true)
+        if [ -n "$PORT80_PID" ]; then
+            PORT80_PROCESS=$(ps -p "$PORT80_PID" -o comm= 2>/dev/null || echo "unknown")
+            log_warning "Port 80 is in use by '$PORT80_PROCESS' (PID $PORT80_PID). Valet needs port 80 free."
+            log_warning "Attempting to stop the process..."
+            if [ "$EUID" -eq 0 ]; then
+                kill "$PORT80_PID" 2>/dev/null || true
+            else
+                sudo kill "$PORT80_PID" 2>/dev/null || true
+            fi
+            sleep 2
+            if lsof -ti:80 &>/dev/null; then
+                log_error "Port 80 still in use. Please free it manually before running 'valet install'."
+            else
+                log_info "Port 80 is now free"
+            fi
+        fi
         log_info "Running valet install..."
         run_as_user "export PATH=\"$COMPOSER_BIN:\$PATH\" && valet install"
         log_info "Valet Linux installed and configured"
@@ -572,15 +626,6 @@ log_info "Checking ApiDog..."
 if ! command -v apidog &> /dev/null && ! dpkg -l 2>/dev/null | grep -q apidog; then
     log_warning "ApiDog not found. Installing from official Linux zip..."
 
-    if ! command -v unzip &> /dev/null; then
-        log_info "Installing unzip dependency for ApiDog package..."
-        if [ "$EUID" -eq 0 ]; then
-            apt-get update && apt-get install -y unzip
-        else
-            sudo apt-get update && sudo apt-get install -y unzip
-        fi
-    fi
-
     APIDOG_TEMP_DIR=$(mktemp -d)
     APIDOG_ZIP_PATH="$APIDOG_TEMP_DIR/apidog.zip"
 
@@ -617,8 +662,78 @@ else
     log_info "ApiDog already installed"
 fi
 
+# 14-16. AI Coding Tools (optional, user-selected)
+echo ""
+echo -e "${GREEN}=== AI Coding Tools ===${NC}"
+echo "Selecione quais ferramentas de IA deseja instalar:"
+echo "  1) OpenCode        - Agente de IA open-source para terminal"
+echo "  2) Claude Code     - CLI da Anthropic para coding"
+echo "  3) GitHub Copilot  - Assistente de IA do GitHub para terminal"
+echo ""
+echo "Digite os números separados por espaço (ex: 1 2 3), ou 0 para nenhum:"
+read -r AI_TOOLS_SELECTION
+
+INSTALL_OPENCODE=false
+INSTALL_CLAUDE=false
+INSTALL_COPILOT=false
+
+for choice in $AI_TOOLS_SELECTION; do
+    case "$choice" in
+        1) INSTALL_OPENCODE=true ;;
+        2) INSTALL_CLAUDE=true ;;
+        3) INSTALL_COPILOT=true ;;
+        0) break ;;
+        *) log_warning "Opção '$choice' ignorada (inválida)" ;;
+    esac
+done
+
+if $INSTALL_OPENCODE; then
+    log_info "Checking OpenCode..."
+    if ! command -v opencode &> /dev/null; then
+        log_warning "OpenCode not found. Installing..."
+        if run_as_user "curl -fsSL https://opencode.ai/install | bash"; then
+            log_info "OpenCode installed successfully"
+        else
+            log_warning "Failed to install OpenCode automatically. Run manually: curl -fsSL https://opencode.ai/install | bash"
+        fi
+    else
+        log_info "OpenCode already installed: $(opencode --version 2>/dev/null || echo 'version check unavailable')"
+    fi
+fi
+
+if $INSTALL_CLAUDE; then
+    log_info "Checking Claude Code..."
+    if ! command -v claude &> /dev/null; then
+        log_warning "Claude Code not found. Installing..."
+        if run_as_user "curl -fsSL https://claude.ai/install.sh | bash"; then
+            log_info "Claude Code installed successfully"
+        else
+            log_warning "Failed to install Claude Code automatically. Run manually: curl -fsSL https://claude.ai/install.sh | bash"
+        fi
+    else
+        log_info "Claude Code already installed: $(claude --version 2>/dev/null || echo 'version check unavailable')"
+    fi
+fi
+
+if $INSTALL_COPILOT; then
+    log_info "Checking GitHub Copilot CLI..."
+    if ! command -v copilot &> /dev/null; then
+        log_warning "GitHub Copilot CLI not found. Installing..."
+        if run_as_user "curl -fsSL https://gh.io/copilot-install | bash"; then
+            log_info "GitHub Copilot CLI installed successfully"
+        else
+            log_warning "Failed to install GitHub Copilot CLI automatically. Run manually: curl -fsSL https://gh.io/copilot-install | bash"
+        fi
+    else
+        log_info "GitHub Copilot CLI already installed"
+    fi
+fi
+
 log_info "=========================================="
 log_info "Setup completed successfully!"
 log_info "=========================================="
 log_info "IMPORTANT: Please log out and log back in (or restart) for all changes to take effect."
 log_info "After restarting, your default shell will be Zsh with Oh My Zsh and the Eastwood theme."
+if $INSTALL_OPENCODE || $INSTALL_CLAUDE || $INSTALL_COPILOT; then
+    log_info "NOTE: As ferramentas de IA instaladas requerem configuração de API key no primeiro uso."
+fi
