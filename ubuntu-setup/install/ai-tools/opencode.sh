@@ -11,3 +11,5 @@ if ! command -v opencode &> /dev/null; then
 else
     log_info "OpenCode already installed: $(opencode --version 2>/dev/null || echo 'version check unavailable')"
 fi
+
+install_agent_skills "$REAL_HOME/.config/opencode/skills"

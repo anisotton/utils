@@ -11,3 +11,5 @@ if ! command -v claude &> /dev/null; then
 else
     log_info "Claude Code already installed: $(claude --version 2>/dev/null || echo 'version check unavailable')"
 fi
+
+install_agent_skills "$REAL_HOME/.claude/skills"

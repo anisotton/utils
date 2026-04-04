@@ -79,5 +79,34 @@ run_as_user() {
     fi
 }
 
+# Usage: install_agent_skills "/target/skills/dir"
+# Symlinks each skill folder so removing the repo removes the skills too
+install_agent_skills() {
+    local target_dir="$1"
+    local skills_src
+    skills_src="$(cd "$UBUNTU_SETUP_PATH/../skills" 2>/dev/null && pwd)"
+
+    if [ ! -d "$skills_src" ]; then
+        log_warning "Skills source directory not found: $UBUNTU_SETUP_PATH/../skills"
+        return 1
+    fi
+
+    run_as_user "mkdir -p '$target_dir'"
+
+    local count=0
+    for skill_dir in "$skills_src"/*/; do
+        local skill_name
+        skill_name=$(basename "$skill_dir")
+        run_as_user "ln -sfn '$skill_dir' '$target_dir/$skill_name'"
+        count=$((count + 1))
+    done
+
+    if [ "$count" -gt 0 ]; then
+        log_info "Linked $count agent skills to $target_dir (symlinked from $skills_src)"
+    else
+        log_warning "No skills found in $skills_src"
+    fi
+}
+
 # Initialize user detection on source
 setup_user_detection

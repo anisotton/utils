@@ -76,9 +76,39 @@ if [ -f "$REAL_HOME/.zshrc" ]; then
         run_as_user "sed -i 's/^plugins=.*/plugins=(git docker docker-compose npm composer sudo web-search z zsh-autosuggestions zsh-syntax-highlighting)/' '$REAL_HOME/.zshrc'"
     fi
 
-    if ! grep -q 'alias_zsh.txt' "$REAL_HOME/.zshrc"; then
+    # --- Install restore_db.sh script ---
+    RESTORE_DB_SRC="$UBUNTU_SETUP_PATH/configs/scripts/restore_db.sh"
+    RESTORE_DB_DEST="$REAL_HOME/.local/bin/restore_db.sh"
+    if [ -f "$RESTORE_DB_SRC" ]; then
+        run_as_user "mkdir -p '$REAL_HOME/.local/bin'"
+        run_as_user "cp '$RESTORE_DB_SRC' '$RESTORE_DB_DEST'"
+        run_as_user "chmod +x '$RESTORE_DB_DEST'"
+        log_info "Installed restore_db.sh to $RESTORE_DB_DEST"
+    fi
+
+    # --- Ask for projects directory ---
+    DEFAULT_PROJECTS="$REAL_HOME/projects"
+    echo ""
+    echo -e "${GREEN}=== Projects Directory ===${NC}"
+    echo "Qual o caminho da pasta dos seus projetos?"
+    echo "  (Enter para usar o padrão: $DEFAULT_PROJECTS)"
+    read -r PROJECTS_PATH_INPUT
+    PROJECTS_PATH="${PROJECTS_PATH_INPUT:-$DEFAULT_PROJECTS}"
+    # Expand ~ if the user typed it
+    PROJECTS_PATH="${PROJECTS_PATH/#\~/$REAL_HOME}"
+    log_info "Projects directory set to: $PROJECTS_PATH"
+
+    # --- Generate aliases from template ---
+    ALIASES_SRC="$UBUNTU_SETUP_PATH/configs/aliases.zsh"
+    ALIASES_DEST="$REAL_HOME/.zsh_aliases"
+    if [ -f "$ALIASES_SRC" ]; then
+        run_as_user "sed 's|__PROJECTS_PATH__|$PROJECTS_PATH|g' '$ALIASES_SRC' > '$ALIASES_DEST'"
+        log_info "Generated .zsh_aliases with projects path: $PROJECTS_PATH"
+    fi
+
+    if ! grep -q '.zsh_aliases' "$REAL_HOME/.zshrc"; then
         run_as_user "echo '' >> '$REAL_HOME/.zshrc'"
-        run_as_user "echo '[ -f ~/IsottonTecnologia/Comandos/alias_zsh.txt ] && source ~/IsottonTecnologia/Comandos/alias_zsh.txt' >> '$REAL_HOME/.zshrc'"
+        run_as_user "echo '[ -f ~/.zsh_aliases ] && source ~/.zsh_aliases' >> '$REAL_HOME/.zshrc'"
     fi
 
     # Uncomment the default Oh My Zsh PATH line if it exists commented out

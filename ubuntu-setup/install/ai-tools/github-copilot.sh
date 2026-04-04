@@ -11,3 +11,5 @@ if ! command -v copilot &> /dev/null; then
 else
     log_info "GitHub Copilot CLI already installed"
 fi
+
+install_agent_skills "$REAL_HOME/.copilot/skills"
