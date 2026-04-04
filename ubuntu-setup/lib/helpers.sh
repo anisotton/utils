@@ -80,7 +80,7 @@ run_as_user() {
 }
 
 # Usage: install_agent_skills "/target/skills/dir"
-# Symlinks each skill folder so removing the repo removes the skills too
+# Symlinks the entire skills folder so new skills are picked up automatically
 install_agent_skills() {
     local target_dir="$1"
     local skills_src
@@ -91,21 +91,8 @@ install_agent_skills() {
         return 1
     fi
 
-    run_as_user "mkdir -p '$target_dir'"
-
-    local count=0
-    for skill_dir in "$skills_src"/*/; do
-        local skill_name
-        skill_name=$(basename "$skill_dir")
-        run_as_user "ln -sfn '$skill_dir' '$target_dir/$skill_name'"
-        count=$((count + 1))
-    done
-
-    if [ "$count" -gt 0 ]; then
-        log_info "Linked $count agent skills to $target_dir (symlinked from $skills_src)"
-    else
-        log_warning "No skills found in $skills_src"
-    fi
+    run_as_user "rm -rf '$target_dir' && ln -s '$skills_src' '$target_dir'"
+    log_info "Agent skills linked dynamically: $target_dir -> $skills_src"
 }
 
 # Initialize user detection on source

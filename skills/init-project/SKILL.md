@@ -1,304 +1,175 @@
 ---
 name: init-project
-description: Inicializa o projeto com seleção de CLI, provider, estrutura de workflows e análise completa
+description: Inicializa o projeto com estrutura de workflows, arquivo de instrução do agente e análise completa com Smart Dispatch
 compatibility:
-  - opencode
   - claude-code
-  - github-copilot
+  - opencode
 ---
 
 # /init - Inicialização de Projeto
 
-Comando para configurar e inicializar projetos com estrutura de workflows, instruções de agente e análise completa.
+Configura a estrutura de trabalho com agentes de IA: pastas de workflow, arquivo de instrução e documentação do projeto.
 
 ## O que este comando faz
 
-1. **Identifica o CLI** - Pergunta qual ferramenta de IA o usuário está utilizando (OpenCode ou Claude Code)
-2. **Seleciona o provider** (apenas OpenCode) - Pergunta qual provider usar e cria `.opencode/oh-my-opencode.json`
-3. **Cria estrutura de workflows** - Pasta `.project/` com subpastas de issues e análises
-4. **Gera instruções de agente** - `AGENTS.md` (OpenCode) ou `CLAUDE.md` (Claude Code) na raiz do projeto
-5. **Configura .gitignore** - Adiciona `.project/` ao .gitignore do projeto
-6. **Analisa o projeto** - Identifica tecnologias, estrutura, funcionalidades e gera documentação
-7. **Gera PROJETO.md** - Documento operacional completo em `.project/docs/PROJETO.md`
+1. **Pergunta qual CLI** — OpenCode ou Claude Code
+2. **Configura o provider** (apenas OpenCode) — pergunta qual provider, padrão GitHub Copilot
+3. **Cria `.project/`** — lê as skills disponíveis e cria todas as estruturas de pasta que elas mencionam
+4. **Atualiza `.gitignore`** — adiciona `.project/` e `.opencode/` (se aplicável)
+5. **Analisa o projeto usando a skill `smart-dispatch`** — subagents paralelos com modelos roteados por complexidade
+6. **Gera `.project/docs/PROJECT.md`** — documento operacional completo
+7. **Gera o arquivo de instrução** — `AGENTS.md` (OpenCode) ou `CLAUDE.md` (Claude Code)
+8. **Apresenta relatório final**
 
 ---
 
 ## Workflow de Execução
 
-### Etapa 0: Identificação do CLI
+### Etapa 1: Identificação do CLI
 
-**ANTES de qualquer outra ação**, identificar qual ferramenta de IA o usuário está utilizando.
+**ANTES de qualquer outra ação**, perguntar qual ferramenta de IA o usuário está usando:
 
-Usar a ferramenta `question` para coletar:
+> "Qual CLI de IA você está utilizando neste projeto?
+> 1. Claude Code (Anthropic)
+> 2. OpenCode"
 
-```
-question({
-  questions: [
-    {
-      header: "CLI de IA",
-      question: "Qual ferramenta de IA você está utilizando neste projeto?",
-      options: [
-        { label: "OpenCode", description: "OpenCode CLI (oh-my-opencode)" },
-        { label: "Claude Code", description: "Claude Code CLI (Anthropic)" }
-      ]
-    }
-  ]
-})
-```
-
-Armazenar a resposta como `CLI_CHOICE` para usar nas etapas seguintes.
+Armazenar como `CLI_CHOICE`.
 
 ---
 
-### Etapa 1: Seleção de Provider (apenas OpenCode)
+### Etapa 2: Seleção de Provider (apenas OpenCode)
 
 **Executar SOMENTE se `CLI_CHOICE = OpenCode`.**
 
-Se `CLI_CHOICE = Claude Code`, pular esta etapa inteiramente e ir para a Etapa 2.
+Perguntar ao usuário qual provider deseja usar, **informando que o padrão é GitHub Copilot**:
 
-Usar a ferramenta `question` para coletar a preferência:
+> "Qual provider deseja utilizar? (padrão: GitHub Copilot)
+> 1. GitHub Copilot ← padrão recomendado
+> 2. Anthropic
+> 3. Google Antigravity"
 
-```
-question({
-  questions: [
-    {
-      header: "Provider",
-      question: "Qual provider deseja utilizar neste projeto?",
-      options: [
-        { label: "GitHub Copilot", description: "Modelos via GitHub Copilot. Prefixo: github-copilot/" },
-        { label: "Anthropic", description: "Modelos via Anthropic (Claude). Prefixo: anthropic/" },
-        { label: "Google Antigravity", description: "Modelos Gemini via Antigravity. Prefixo: google/" }
-      ]
-    }
-  ]
-})
-```
+Armazenar como `PROVIDER_CHOICE`. Se o usuário confirmar o padrão, usar `GitHub Copilot`.
 
-#### Mapeamento de Prefixos
-
-| Provider | Prefixo |
-|----------|---------|
-| GitHub Copilot | `github-copilot/` |
-| Anthropic | `anthropic/` |
-| Google Antigravity | `google/` |
-
-#### Lógica de Criação do oh-my-opencode.json
-
-1. **Ler** o arquivo global `~/.config/opencode/oh-my-opencode.json`
-2. **Identificar** o provider selecionado
-3. **Mapear cada agente** para o modelo equivalente do provider escolhido, usando a tabela de equivalências abaixo
-4. **Preservar** qualquer campo além de `model` que exista no agente (temperature, etc.)
-5. **Gravar** em `.opencode/oh-my-opencode.json` na raiz do projeto
-6. **NÃO** copiar o campo `$schema` do global — usar sempre a referência atualizada
-
-#### Tabela de Equivalências por Provider
-
-Cada agente tem um **papel** (orquestrador, raciocínio, busca leve, frontend, escrita, visão). O modelo escolhido deve corresponder ao melhor modelo **daquele provider** para aquele papel.
+#### Mapeamento de modelos por provider
 
 | Agente | Papel | GitHub Copilot | Anthropic | Google Antigravity |
 |--------|-------|----------------|-----------|-------------------|
-| sisyphus | Orquestrador principal (forte) | `github-copilot/claude-opus-4.6` | `anthropic/claude-opus-4-6` | `google/antigravity-gemini-3-pro-high` |
+| sisyphus | Orquestrador principal | `github-copilot/claude-opus-4.6` | `anthropic/claude-opus-4-6` | `google/antigravity-gemini-3-pro-high` |
 | oracle | Raciocínio profundo | `github-copilot/gpt-5.2` | `anthropic/claude-opus-4-6` | `google/antigravity-gemini-3-pro-high` |
-| librarian | Busca e referências (leve) | `opencode/glm-4.7-free` | `anthropic/claude-haiku-4` | `google/antigravity-gemini-3-flash` |
-| explore | Grep rápido (leve) | `opencode/gpt-5-nano` | `anthropic/claude-haiku-4` | `google/antigravity-gemini-3-flash` |
+| librarian | Busca e referências | `opencode/glm-4.7-free` | `anthropic/claude-haiku-4` | `google/antigravity-gemini-3-flash` |
+| explore | Grep rápido | `opencode/gpt-5-nano` | `anthropic/claude-haiku-4` | `google/antigravity-gemini-3-flash` |
 | frontend-ui-ux-engineer | Frontend/UI | `github-copilot/claude-sonnet-4-6` | `anthropic/claude-sonnet-4-6` | `google/antigravity-gemini-3-pro-low` |
-| document-writer | Escrita/documentação | `github-copilot/claude-sonnet-4-6` | `anthropic/claude-sonnet-4-6` | `google/antigravity-gemini-3-pro-low` |
-| multimodal-looker | Análise visual/multimodal | `github-copilot/gpt-5.2` | `anthropic/claude-opus-4-6` | `google/antigravity-gemini-3-pro-high` |
+| document-writer | Escrita/docs | `github-copilot/claude-sonnet-4-6` | `anthropic/claude-sonnet-4-6` | `google/antigravity-gemini-3-pro-low` |
+| multimodal-looker | Análise visual | `github-copilot/gpt-5.2` | `anthropic/claude-opus-4-6` | `google/antigravity-gemini-3-pro-high` |
 
-> **Nota:** Se o global tiver agentes que NÃO estão nesta tabela, copiar o agente mantendo o modelo original (não trocar).
+#### Criar `.opencode/oh-my-opencode.json`
 
-#### Exemplo de transformação
+1. Ler `~/.config/opencode/oh-my-opencode.json` (arquivo global)
+2. Remapear os modelos conforme tabela acima para o provider escolhido
+3. Preservar campos além de `model` (temperature, etc.)
+4. Gravar em `.opencode/oh-my-opencode.json` (local do projeto)
+5. **NÃO** copiar o campo `$schema` do global
 
-Global (`~/.config/opencode/oh-my-opencode.json`):
-```json
-{
-  "agents": {
-    "sisyphus": { "model": "github-copilot/claude-opus-4.6" },
-    "oracle": { "model": "github-copilot/gpt-5.2" },
-    "librarian": { "model": "opencode/glm-4.7-free" },
-    "explore": { "model": "opencode/gpt-5-nano" }
-  }
-}
+**Se já existir `.opencode/oh-my-opencode.json`**, perguntar se deseja sobrescrever.
+
+**Criar `.opencode/.gitignore`:**
 ```
-
-Gerado (`.opencode/oh-my-opencode.json`) se escolheu **Anthropic**:
-```json
-{
-  "agents": {
-    "sisyphus": { "model": "anthropic/claude-opus-4-6" },
-    "oracle": { "model": "anthropic/claude-opus-4-6" },
-    "librarian": { "model": "anthropic/claude-haiku-4" },
-    "explore": { "model": "anthropic/claude-haiku-4" }
-  }
-}
-```
-
-Gerado se escolheu **GitHub Copilot**:
-```json
-{
-  "agents": {
-    "sisyphus": { "model": "github-copilot/claude-opus-4.6" },
-    "oracle": { "model": "github-copilot/gpt-5.2" },
-    "librarian": { "model": "opencode/glm-4.7-free" },
-    "explore": { "model": "opencode/gpt-5-nano" }
-  }
-}
-```
-
-**Se já existir `.opencode/oh-my-opencode.json`**, perguntar se deseja sobrescrever:
-
-```
-question({
-  questions: [
-    {
-      header: "Config existente",
-      question: "Já existe .opencode/oh-my-opencode.json neste projeto. Deseja sobrescrever com o novo provider?",
-      options: [
-        { label: "Sobrescrever", description: "Recriar o arquivo com o novo provider selecionado" },
-        { label: "Manter atual", description: "Não alterar a configuração existente" }
-      ]
-    }
-  ]
-})
+node_modules/
+package.json
+bun.lock
 ```
 
 ---
 
-### Etapa 2: Scaffold de Workflows
+### Etapa 3: Criar estrutura `.project/`
 
-Verificar e criar (se necessário) a estrutura completa:
+#### 3a. Ler skills disponíveis
 
-```
-.project/
-├── docs/                        # Documentação do projeto
-│   └── PROJETO.md               # Gerado na Etapa 5
-│
-├── issues/                      # Workflow de issues
-│   ├── backlog/
-│   ├── pending-validation/
-│   ├── validation-feedback/
-│   └── executed/
-│
-└── analises/                    # Workflow de análise de demandas (DDP)
-    ├── received/
-    ├── in-analysis/
-    ├── pending-review/
-    ├── approved/
-    └── ready-for-dev/
-```
+Ler os arquivos SKILL.md de todas as skills disponíveis (em `~/.claude/skills/` ou `.claude/skills/`) e identificar quais mencionam estruturas de pasta dentro de `.project/`.
 
-**Se `CLI_CHOICE = OpenCode`**, criar também a pasta `.opencode/` para configurações específicas:
+**Skills identificadas e suas estruturas:**
 
-```
-.opencode/
-├── oh-my-opencode.json          # Criado na Etapa 1
-└── .gitignore                   # Ignora node_modules/, package.json, bun.lock
-```
+| Skill | Estruturas em `.project/` |
+|-------|--------------------------|
+| `workflow-issues` | `issues/{backlog,pending-validation,validation-feedback,executed}`, `docs/` |
+| `workflow-analise-demandas` | `analises/{received,in-analysis,pending-review,approved,ready-for-dev}`, `docs/` |
+
+> **Nota:** Ao ler as skills, se alguma outra mencionar estruturas em `.project/`, criá-las também.
+
+#### 3b. Criar todas as pastas identificadas
 
 ```bash
 mkdir -p .project/docs
-mkdir -p .project/issues/{backlog,pending-validation,validation-feedback,executed}
-mkdir -p .project/analises/{received,in-analysis,pending-review,approved,ready-for-dev}
-
-grep -q "^\.project" .gitignore 2>/dev/null || echo ".project/" >> .gitignore
+mkdir -p .project/issues/backlog
+mkdir -p .project/issues/pending-validation
+mkdir -p .project/issues/validation-feedback
+mkdir -p .project/issues/executed
+mkdir -p .project/analises/received
+mkdir -p .project/analises/in-analysis
+mkdir -p .project/analises/pending-review
+mkdir -p .project/analises/approved
+mkdir -p .project/analises/ready-for-dev
 ```
 
 **Apenas se `CLI_CHOICE = OpenCode`:**
 ```bash
 mkdir -p .opencode
+```
 
-cat > .opencode/.gitignore << 'EOF'
-node_modules/
-package.json
-bun.lock
-EOF
+**Comportamento idempotente:** se pasta já existe, não sobrescrever.
 
+---
+
+### Etapa 4: Atualizar `.gitignore`
+
+```bash
+grep -q "^\.project" .gitignore 2>/dev/null || echo ".project/" >> .gitignore
+```
+
+**Apenas se `CLI_CHOICE = OpenCode`:**
+```bash
 grep -q "^\.opencode" .gitignore 2>/dev/null || echo ".opencode/" >> .gitignore
 ```
 
-**Comportamento idempotente:**
-- Se pastas já existem: não sobrescrever
-- Se `.gitignore` já lista `.project/`: não duplicar
-- Se `.opencode/.gitignore` já existe: não sobrescrever
-
 ---
 
-### Etapa 3: Geração do Arquivo de Instruções do Agente
+### Etapa 5: Análise do projeto com Smart Dispatch
 
-Conforme o CLI escolhido, gerar o arquivo de instruções na raiz do projeto.
+Invocar a skill `smart-dispatch` para rotear os subagents de análise com o modelo adequado para cada tarefa.
 
-#### Se `CLI_CHOICE = OpenCode` → gerar `AGENTS.md`
+Seguindo as regras de roteamento da `smart-dispatch`, disparar em paralelo:
 
-Criar `AGENTS.md` na raiz do projeto com a listagem de skills disponíveis:
-
-```markdown
-# Regras do Projeto
-
-## Skills disponíveis
-
-Use as skills abaixo invocando-as pelo nome quando o contexto for relevante:
-
-- **`workflow-issues`** — Gerenciar ciclo de vida de issues (criar, mover, validar, finalizar)
-- **`workflow-analise-demandas`** — Análise técnica de demandas DDP (AS-IS + TO-BE → HOW-TO)
-- **`check-documentation`** — Consultar documentação oficial de tecnologias do projeto
-- **`laravel-dusk`** — Testes end-to-end com Laravel Dusk
-- **`interface-design`** — Design de interfaces (dashboards, painéis, apps)
-- **`init-project`** — Inicializar projeto com estrutura de workflows e análise
-
-## Estrutura de Workflows
-
-- Issues: `.project/issues/` (backlog → pending-validation → validation-feedback → executed)
-- Análises: `.project/analises/` (received → in-analysis → pending-review → approved → ready-for-dev)
-- Documentação: `.project/docs/PROJETO.md`
+**[opus] — Arquitetura e estrutura** *(raciocínio complexo)*
+```
+Agent(
+  subagent_type="Explore",
+  model="opus",
+  run_in_background=true,
+  description="Analisar arquitetura do projeto",
+  prompt="Mapeie a estrutura do projeto: pastas principais e propósito, padrão arquitetural (MVC, Clean, Hexagonal, DDD, etc), entry points, módulos/domínios identificáveis. Ignore node_modules, vendor, dist, build. Retorne mapa estruturado com padrão arquitetural e limites entre módulos."
+)
 ```
 
-**Se já existir `AGENTS.md`**, perguntar se deseja sobrescrever ou fazer merge.
-
-#### Se `CLI_CHOICE = Claude Code` → gerar `CLAUDE.md`
-
-Criar `CLAUDE.md` na raiz do projeto:
-
-```markdown
-# Regras do Projeto
-
-## Skills disponíveis
-
-Use as skills abaixo invocando-as pelo nome quando o contexto for relevante:
-
-- **`workflow-issues`** — Gerenciar ciclo de vida de issues (criar, mover, validar, finalizar)
-- **`workflow-analise-demandas`** — Análise técnica de demandas DDP (AS-IS + TO-BE → HOW-TO)
-- **`check-documentation`** — Consultar documentação oficial de tecnologias do projeto
-- **`laravel-dusk`** — Testes end-to-end com Laravel Dusk
-- **`interface-design`** — Design de interfaces (dashboards, painéis, apps)
-- **`init-project`** — Inicializar projeto com estrutura de workflows e análise
-
-## Estrutura de Workflows
-
-- Issues: `.project/issues/` (backlog → pending-validation → validation-feedback → executed)
-- Análises: `.project/analises/` (received → in-analysis → pending-review → approved → ready-for-dev)
-- Documentação: `.project/docs/PROJETO.md`
+**[sonnet] — Tech stack, integrações e módulos** *(implementação padrão)*
+```
+Agent(
+  subagent_type="Explore",
+  model="sonnet",
+  run_in_background=true,
+  description="Identificar tech stack, dependências e integrações",
+  prompt="Analise: linguagens, frameworks, bibliotecas principais, runtime, versões detectáveis. Verifique package.json, composer.json, pyproject.toml, go.mod e similares. Identifique integrações externas (APIs, serviços, webhooks) e principais funcionalidades/módulos do sistema. Para cada módulo, indique localização e dependências. Retorne lista estruturada."
+)
 ```
 
-**Se já existir `CLAUDE.md`**, perguntar se deseja sobrescrever ou fazer merge.
-
-> **Nota:** O conteúdo base é o mesmo para ambos os CLIs. A diferença é o nome do arquivo (`AGENTS.md` vs `CLAUDE.md`) pois cada CLI lê seu respectivo arquivo automaticamente.
-
----
-
-### Etapa 4: Discovery e Análise (Paralelo)
-
-**Disparar agentes explore em background IMEDIATAMENTE:**
-
+**[haiku] — Comandos, ambiente e convenções** *(varredura mecânica)*
 ```
-task(subagent_type="explore", load_skills=[], description="Identificar tech stack e dependências", run_in_background=true, prompt="Analise o projeto para identificar: linguagens de programação, frameworks, bibliotecas principais, runtime (node, php, python, etc), versões quando detectáveis. Verifique package.json, composer.json, pyproject.toml, go.mod, Cargo.toml e similares. Retorne lista estruturada com nome, versão e papel de cada dependência principal.")
-
-task(subagent_type="explore", load_skills=[], description="Mapear estrutura e arquitetura", run_in_background=true, prompt="Mapeie a estrutura do projeto: pastas principais e seu propósito, padrão arquitetural (MVC, Clean, Hexagonal, DDD, etc), entry points, módulos/domínios identificáveis. Analise como o código está organizado e quais são os limites entre módulos. Ignore node_modules, vendor, dist, build. Retorne mapa estruturado.")
-
-task(subagent_type="explore", load_skills=[], description="Identificar comandos e ambiente", run_in_background=true, prompt="Encontre como rodar o projeto: scripts em package.json/composer.json, Makefile, justfile, docker-compose, Dockerfile. Identifique comandos de dev, build, test, lint, deploy. Verifique .env.example para variáveis de ambiente necessárias. Retorne lista de comandos organizados por categoria (setup, dev, test, build, deploy).")
-
-task(subagent_type="explore", load_skills=[], description="Analisar convenções e qualidade", run_in_background=true, prompt="Identifique convenções do projeto: configurações de lint (eslint, phpstan, ruff, etc), formatação (prettier, pint, black), testes (jest, vitest, phpunit, pytest), CI/CD (.github/workflows, gitlab-ci). Analise padrões de naming, imports, estrutura de arquivos. Retorne convenções detectadas e ferramentas de qualidade configuradas.")
-
-task(subagent_type="explore", load_skills=[], description="Identificar funcionalidades e integrações", run_in_background=true, prompt="Identifique as principais funcionalidades/módulos do sistema: autenticação, CRUD, APIs, jobs/filas, integrações externas, webhooks, etc. Para cada funcionalidade, indique localização no código e dependências principais. Retorne lista organizada por domínio/módulo.")
+Agent(
+  subagent_type="Explore",
+  model="haiku",
+  run_in_background=true,
+  description="Identificar comandos, ambiente e convenções",
+  prompt="Encontre como rodar o projeto: scripts em package.json/composer.json, Makefile, docker-compose, Dockerfile. Identifique comandos de dev, build, test, lint, deploy. Verifique .env.example para variáveis de ambiente. Identifique também convenções de lint, formatação, testes e CI/CD. Retorne tudo organizado por categoria."
+)
 ```
 
 **Enquanto agentes rodam, executar no main session:**
@@ -306,7 +177,7 @@ task(subagent_type="explore", load_skills=[], description="Identificar funcional
 ```bash
 find . -maxdepth 2 -type d -not -path "*/\.*" -not -path "*/node_modules/*" -not -path "*/vendor/*" -not -path "*/dist/*" -not -path "*/build/*" | head -40
 
-ls package.json composer.json pyproject.toml Cargo.toml go.mod pom.xml build.gradle Gemfile 2>/dev/null
+ls package.json composer.json pyproject.toml Cargo.toml go.mod pom.xml Gemfile 2>/dev/null
 
 ls README* 2>/dev/null
 
@@ -316,20 +187,9 @@ git remote -v 2>/dev/null
 
 ---
 
-### Etapa 5: Geração do PROJETO.md
+### Etapa 6: Gerar `.project/docs/PROJECT.md`
 
-**Coletar resultados dos agentes:**
-
-```
-for each task_id: background_output(task_id="...")
-```
-
-**Consolidar informações e criar `.project/docs/PROJETO.md`** usando o template abaixo.
-
-Se já existir PROJETO.md:
-- Perguntar se deseja atualizar ou manter o atual (a menos que `--force`)
-
-#### Template do PROJETO.md
+Coletar resultados de todos os subagents e consolidar em `.project/docs/PROJECT.md`:
 
 ```markdown
 # Projeto: {nome do projeto}
@@ -371,7 +231,7 @@ Se já existir PROJETO.md:
 
 ### Setup inicial
 ```bash
-{comandos de setup: clone, install, env, migrations, etc}
+{comandos de setup}
 ```
 
 ### Desenvolvimento
@@ -384,26 +244,17 @@ Se já existir PROJETO.md:
 {comando para rodar testes}
 ```
 
-### Build
+### Build / Lint
 ```bash
-{comando para build}
-```
-
-### Lint/Format
-```bash
-{comandos de lint e formatação}
+{comandos de build e formatação}
 ```
 
 ## Convenções
 
-### Código
-- **Naming:** {padrões de nomenclatura detectados}
+- **Naming:** {padrões detectados}
 - **Imports:** {convenção de imports}
-- **Estilo:** {prettier/pint/black/etc — configuração detectada}
-
-### Git
-- **Commits:** {padrão se detectado, ex: conventional commits}
-- **Branches:** {padrão se detectado}
+- **Estilo:** {configuração detectada}
+- **Commits:** {padrão se detectado}
 
 ## Dependências Principais
 
@@ -417,15 +268,15 @@ Se já existir PROJETO.md:
 |-----------------|------|-----------|
 | {serviço} | API/SDK/Webhook | {descrição} |
 
-## Riscos e Armadilhas
-
-- {pontos de atenção, débitos técnicos, coisas não-óbvias que podem quebrar}
-
 ## Variáveis de Ambiente
 
 | Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|
 | {var} | Sim/Não | {para que serve} |
+
+## Riscos e Armadilhas
+
+- {pontos de atenção, débitos técnicos, coisas não-óbvias que podem quebrar}
 
 ---
 
@@ -444,11 +295,75 @@ Localização: `.project/analises/`
 *Gerado automaticamente pelo comando `/init`*
 ```
 
+**Se já existir PROJECT.md**, perguntar se deseja atualizar ou manter.
+
 ---
 
-### Etapa 6: Relatório Final
+### Etapa 7: Gerar arquivo de instrução do agente
 
-Apresentar ao usuário:
+#### Se `CLI_CHOICE = Claude Code` → criar `CLAUDE.md`
+
+```markdown
+# Regras do Projeto
+
+## Skills disponíveis
+
+Use as skills abaixo invocando-as pelo nome quando o contexto for relevante:
+
+- **`workflow-issues`** — Gerenciar ciclo de vida de issues (criar, mover, validar, finalizar)
+- **`workflow-analise-demandas`** — Análise técnica de demandas DDP (AS-IS + TO-BE → HOW-TO)
+- **`smart-dispatch`** — Rotear tarefas para o modelo Claude ideal por complexidade
+- **`check-documentation`** — Consultar documentação oficial de tecnologias do projeto
+- **`laravel-dusk`** — Testes end-to-end com Laravel Dusk
+- **`interface-design`** — Design de interfaces (dashboards, painéis, apps)
+- **`init-project`** — Re-inicializar projeto ou atualizar documentação
+
+## Contexto do Projeto
+
+Veja `.project/docs/PROJECT.md` para stack, estrutura, comandos e convenções.
+
+## Estrutura de Workflows
+
+- Issues: `.project/issues/` (backlog → pending-validation → validation-feedback → executed)
+- Análises: `.project/analises/` (received → in-analysis → pending-review → approved → ready-for-dev)
+```
+
+**Se já existir `CLAUDE.md`**, perguntar se deseja sobrescrever ou fazer merge.
+
+#### Se `CLI_CHOICE = OpenCode` → criar `AGENTS.md`
+
+Mesmo conteúdo acima, mas salvo como `AGENTS.md`.
+
+**Se já existir `AGENTS.md`**, perguntar se deseja sobrescrever ou fazer merge.
+
+---
+
+### Etapa 8: Relatório Final
+
+**Se `CLI_CHOICE = Claude Code`:**
+```
+=== /init Concluído ===
+
+CLI: Claude Code
+Projeto: {nome do projeto}
+Tech Stack: {resumo}
+
+Estruturas criadas:
+  [OK] CLAUDE.md gerado na raiz do projeto
+  [OK] .project/docs/PROJECT.md gerado
+  [OK] .project/issues/ configurado
+  [OK] .project/analises/ configurado
+  [OK] .gitignore atualizado
+  [OK] skill smart-dispatch verificada
+
+Funcionalidades identificadas: {N}
+Comandos mapeados: {lista}
+
+Próximos passos:
+  - Revisar .project/docs/PROJECT.md
+  - Revisar CLAUDE.md e adicionar regras específicas do projeto
+  - Criar issues em .project/issues/backlog/
+```
 
 **Se `CLI_CHOICE = OpenCode`:**
 ```
@@ -459,10 +374,10 @@ Projeto: {nome do projeto}
 Tech Stack: {resumo}
 Provider: {provider selecionado}
 
-Estruturas:
+Estruturas criadas:
   [OK] .opencode/oh-my-opencode.json criado ({provider})
-  [OK] AGENTS.md criado na raiz do projeto
-  [OK] .project/docs/PROJETO.md criado
+  [OK] AGENTS.md gerado na raiz do projeto
+  [OK] .project/docs/PROJECT.md gerado
   [OK] .project/issues/ configurado
   [OK] .project/analises/ configurado
   [OK] .gitignore atualizado
@@ -471,34 +386,8 @@ Funcionalidades identificadas: {N}
 Comandos mapeados: {lista}
 
 Próximos passos:
-  - Revisar .project/docs/PROJETO.md
+  - Revisar .project/docs/PROJECT.md
   - Revisar AGENTS.md e adicionar regras específicas do projeto
-  - Rodar /init-deep para gerar AGENTS.md hierárquico (recomendado para projetos grandes)
-  - Criar issues em .project/issues/backlog/
-  - Usar /start-work para começar desenvolvimento
-```
-
-**Se `CLI_CHOICE = Claude Code`:**
-```
-=== /init Concluído ===
-
-CLI: Claude Code
-Projeto: {nome do projeto}
-Tech Stack: {resumo}
-
-Estruturas:
-  [OK] CLAUDE.md criado na raiz do projeto
-  [OK] .project/docs/PROJETO.md criado
-  [OK] .project/issues/ configurado
-  [OK] .project/analises/ configurado
-  [OK] .gitignore atualizado
-
-Funcionalidades identificadas: {N}
-Comandos mapeados: {lista}
-
-Próximos passos:
-  - Revisar .project/docs/PROJETO.md
-  - Revisar CLAUDE.md e adicionar regras específicas do projeto
   - Criar issues em .project/issues/backlog/
 ```
 
@@ -508,41 +397,22 @@ Próximos passos:
 
 | Flag | Descrição |
 |------|-----------|
-| `--force` | Recria estruturas e arquivos mesmo se existirem (com confirmação) |
-| `--skip-analysis` | Cria estruturas e configura CLI, sem análise profunda nem PROJETO.md |
-| `--update` | Atualiza apenas PROJETO.md e instruções do agente, mantém estruturas |
+| `--force` | Recria todos os arquivos mesmo se existirem (com confirmação) |
+| `--skip-analysis` | Cria estruturas e configura CLI, sem análise nem PROJECT.md |
+| `--update` | Atualiza apenas PROJECT.md e arquivo de instrução, mantém estruturas |
 
 ---
 
 ## Regras Importantes
 
-1. **SEMPRE** perguntar o CLI antes de qualquer outra ação
-2. **SEMPRE** perguntar o provider antes de iniciar (apenas OpenCode)
-3. **NUNCA** editar o oh-my-opencode.json GLOBAL (`~/.config/opencode/`) — apenas o local do projeto (`.opencode/`)
-4. **SEMPRE** ler o oh-my-opencode.json global como base para gerar o local (apenas OpenCode)
+1. **SEMPRE** verificar a skill smart-dispatch antes de qualquer outra ação
+2. **SEMPRE** perguntar o CLI antes de criar qualquer arquivo
+3. **SEMPRE** perguntar o provider antes de configurar OpenCode (padrão: GitHub Copilot)
+4. **NUNCA** editar o `oh-my-opencode.json` GLOBAL — apenas o local do projeto
 5. **NUNCA** sobrescrever arquivos existentes sem confirmação (exceto com `--force`)
-6. **SEMPRE** verificar estruturas existentes antes de criar
-7. **SEMPRE** adicionar `.project/` ao `.gitignore` do projeto
-8. **SEMPRE** adicionar `.opencode/` ao `.gitignore` do projeto (apenas OpenCode)
-9. **SEMPRE** gerar o arquivo de instruções correto: `AGENTS.md` para OpenCode, `CLAUDE.md` para Claude Code
-10. **SEMPRE** usar TodoWrite para rastrear progresso das etapas
-11. **SEMPRE** coletar resultados dos agentes background antes de gerar PROJETO.md
-12. **SEMPRE** apresentar relatório final ao usuário
-13. **SEMPRE** sugerir `/init-deep` no final para projetos com muitos módulos (apenas OpenCode)
-
----
-
-## TodoWrite Obrigatório
-
-```
-TodoWrite([
-  { content: "Identificar CLI (OpenCode ou Claude Code)", status: "pending", priority: "high" },
-  { content: "Selecionar provider e criar .opencode/oh-my-opencode.json (se OpenCode)", status: "pending", priority: "high" },
-  { content: "Criar estrutura .project/ com workflows", status: "pending", priority: "high" },
-  { content: "Gerar arquivo de instruções do agente (AGENTS.md ou CLAUDE.md)", status: "pending", priority: "high" },
-  { content: "Disparar agentes explore para análise do projeto", status: "pending", priority: "high" },
-  { content: "Coletar resultados e gerar .project/docs/PROJETO.md", status: "pending", priority: "high" },
-  { content: "Verificar/atualizar .gitignore do projeto", status: "pending", priority: "medium" },
-  { content: "Apresentar relatório final", status: "pending", priority: "medium" }
-])
-```
+6. **SEMPRE** ler as skills disponíveis para identificar estruturas a criar em `.project/`
+7. **SEMPRE** adicionar `.project/` ao `.gitignore`
+8. **SEMPRE** adicionar `.opencode/` ao `.gitignore` (apenas OpenCode)
+9. **SEMPRE** usar Smart Dispatch para rotear os subagents de análise por complexidade
+10. **SEMPRE** coletar resultados dos subagents antes de gerar PROJECT.md
+11. **SEMPRE** apresentar relatório final
