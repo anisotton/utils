@@ -16,19 +16,26 @@ else
 fi
 
 log_info "Setting Zsh as default shell..."
-CURRENT_SHELL=$(getent passwd "$REAL_USER" | cut -d: -f7)
 TARGET_ZSH="$(command -v zsh)"
+CURRENT_SHELL=$(run_as_user 'grep "^$(whoami):" /etc/passwd | cut -d: -f7' 2>/dev/null || echo "")
+if [ -z "$CURRENT_SHELL" ]; then
+    CURRENT_SHELL=$(run_as_user "echo \$SHELL")
+fi
 if [ "$CURRENT_SHELL" != "$TARGET_ZSH" ]; then
     if [ "$EUID" -eq 0 ]; then
-        chsh -s "$TARGET_ZSH" "$REAL_USER"
+        if chsh -s "$TARGET_ZSH" "$REAL_USER" 2>/dev/null; then
+            log_info "Default shell updated to Zsh for $REAL_USER"
+        else
+            log_warning "chsh failed. Trying usermod..."
+            usermod -s "$TARGET_ZSH" "$REAL_USER" && log_info "Default shell updated to Zsh for $REAL_USER" || log_warning "Failed to set Zsh as default shell. Run manually: sudo chsh -s $TARGET_ZSH $REAL_USER"
+        fi
     else
-        sudo chsh -s "$TARGET_ZSH" "$REAL_USER"
-    fi
-
-    if [ $? -eq 0 ]; then
-        log_info "Default shell updated to Zsh for $REAL_USER"
-    else
-        log_warning "Failed to set Zsh as default shell. Run manually: sudo chsh -s $TARGET_ZSH $REAL_USER"
+        if sudo chsh -s "$TARGET_ZSH" "$REAL_USER" 2>/dev/null; then
+            log_info "Default shell updated to Zsh for $REAL_USER"
+        else
+            log_warning "chsh failed. Trying usermod..."
+            sudo usermod -s "$TARGET_ZSH" "$REAL_USER" && log_info "Default shell updated to Zsh for $REAL_USER" || log_warning "Failed to set Zsh as default shell. Run manually: sudo chsh -s $TARGET_ZSH $REAL_USER"
+        fi
     fi
 else
     log_info "Zsh is already the default shell"
