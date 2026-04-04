@@ -16,17 +16,19 @@ else
 fi
 
 log_info "Setting Zsh as default shell..."
-CURRENT_SHELL=$(run_as_user "echo \$SHELL")
+CURRENT_SHELL=$(getent passwd "$REAL_USER" | cut -d: -f7)
 TARGET_ZSH="$(command -v zsh)"
 if [ "$CURRENT_SHELL" != "$TARGET_ZSH" ]; then
     if [ "$EUID" -eq 0 ]; then
-        if chsh -s "$TARGET_ZSH" "$REAL_USER"; then
-            log_info "Default shell updated to Zsh for $REAL_USER"
-        else
-            log_warning "Failed to set Zsh as default shell automatically. Run manually: chsh -s $TARGET_ZSH $REAL_USER"
-        fi
+        chsh -s "$TARGET_ZSH" "$REAL_USER"
     else
-        log_warning "Run manually to set Zsh as default shell: chsh -s $TARGET_ZSH"
+        sudo chsh -s "$TARGET_ZSH" "$REAL_USER"
+    fi
+
+    if [ $? -eq 0 ]; then
+        log_info "Default shell updated to Zsh for $REAL_USER"
+    else
+        log_warning "Failed to set Zsh as default shell. Run manually: sudo chsh -s $TARGET_ZSH $REAL_USER"
     fi
 else
     log_info "Zsh is already the default shell"
@@ -71,5 +73,11 @@ if [ -f "$REAL_HOME/.zshrc" ]; then
         run_as_user "echo '' >> '$REAL_HOME/.zshrc'"
         run_as_user "echo '[ -f ~/IsottonTecnologia/Comandos/alias_zsh.txt ] && source ~/IsottonTecnologia/Comandos/alias_zsh.txt' >> '$REAL_HOME/.zshrc'"
     fi
+
+    if ! grep -q '\.local/bin' "$REAL_HOME/.zshrc"; then
+        run_as_user "echo '' >> '$REAL_HOME/.zshrc'"
+        run_as_user "echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> '$REAL_HOME/.zshrc'"
+    fi
+
     log_info ".zshrc configured"
 fi
