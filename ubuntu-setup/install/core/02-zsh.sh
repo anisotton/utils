@@ -81,7 +81,11 @@ if [ -f "$REAL_HOME/.zshrc" ]; then
         run_as_user "echo '[ -f ~/IsottonTecnologia/Comandos/alias_zsh.txt ] && source ~/IsottonTecnologia/Comandos/alias_zsh.txt' >> '$REAL_HOME/.zshrc'"
     fi
 
-    if ! grep -q '\.local/bin' "$REAL_HOME/.zshrc"; then
+    # Uncomment the default Oh My Zsh PATH line if it exists commented out
+    if grep -q '^# export PATH=\$HOME/bin:\$HOME/\.local/bin' "$REAL_HOME/.zshrc"; then
+        run_as_user "sed -i 's|^# export PATH=\$HOME/bin:\$HOME/\.local/bin|export PATH=\$HOME/bin:\$HOME/.local/bin|' '$REAL_HOME/.zshrc'"
+    elif ! grep -q '^[^#]*\.local/bin' "$REAL_HOME/.zshrc"; then
+        # If no active .local/bin PATH entry exists, add one
         run_as_user "echo '' >> '$REAL_HOME/.zshrc'"
         run_as_user "echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> '$REAL_HOME/.zshrc'"
     fi
