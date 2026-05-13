@@ -1,8 +1,14 @@
 #!/bin/bash
 
-log_info "Configurando Traefik..."
+log_info "Verificando Traefik..."
 
 TRAEFIK_DIR="/opt/traefik"
+
+# Se o container já estiver rodando, não reconfigura
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^traefik$'; then
+    log_info "Traefik já está rodando — pulando."
+    return 0 2>/dev/null || exit 0
+fi
 
 if [ "$EUID" -eq 0 ]; then
     mkdir -p "$TRAEFIK_DIR"
