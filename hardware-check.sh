@@ -161,12 +161,14 @@ run_stress_test() {
     local stress_output
     if stress_output=$(sudo stress-ng --cpu "$cpu_cores" --vm 2 --vm-bytes 256M \
         --timeout 300s --metrics --log-file /tmp/stress-ng.log 2>&1); then
+        echo "$stress_output" >> "$REPORT_FILE"
         cat /tmp/stress-ng.log >> "$REPORT_FILE" 2>/dev/null || true
         log_info "Stress test concluído sem erros."
         save_result "CPU/Stress" "OK" "${cpu_cores} cores + 2 vm workers, 5 min"
     else
         log_error "Stress test falhou ou reportou erros!"
         echo "$stress_output" >> "$REPORT_FILE"
+        cat /tmp/stress-ng.log >> "$REPORT_FILE" 2>/dev/null || true
         save_result "CPU/Stress" "FAIL" "erros durante stress test"
     fi
 }
@@ -197,18 +199,27 @@ run_temp_check() {
     echo "--- lm-sensors ---" >> "$REPORT_FILE"
     echo "$sensors_output" >> "$REPORT_FILE"
 
+    # Extrai apenas as leituras correntes (logo após o ":"), ignorando thresholds
+    # como "high = +80.0°C, crit = +95.0°C".
+    local current_temps
+    current_temps=$(echo "$sensors_output" | grep -oP ':\s+\+?\K[0-9]+\.[0-9]+(?=°C)' || true)
+
+    if [ -z "$current_temps" ]; then
+        log_warning "Nenhuma leitura de temperatura encontrada na saída do sensors."
+        save_result "Temperatura" "WARN" "sem leituras de temperatura"
+        return
+    fi
+
     # Verifica temperaturas críticas (>85°C)
     local critical
-    critical=$(echo "$sensors_output" | grep -oP '[0-9]+\.[0-9]+°C' | \
-               grep -oP '[0-9]+' | awk '$1 > 85' || true)
+    critical=$(echo "$current_temps" | awk '$1 > 85 {printf "%s ", $1}' | sed 's/ $//')
 
     if [ -n "$critical" ]; then
         log_error "Temperatura crítica detectada: ${critical}°C"
         save_result "Temperatura" "FAIL" "acima de 85°C: ${critical}°C"
     else
         local max_temp
-        max_temp=$(echo "$sensors_output" | grep -oP '[0-9]+\.[0-9]+°C' | \
-                   grep -oP '[0-9]+\.[0-9]+' | sort -n | tail -1 || echo "?")
+        max_temp=$(echo "$current_temps" | sort -n | tail -1)
         log_info "Temperatura normal. Máxima lida: ${max_temp}°C"
         save_result "Temperatura" "OK" "máx: ${max_temp}°C (abaixo de 85°C)"
     fi
