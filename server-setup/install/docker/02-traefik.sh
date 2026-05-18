@@ -38,6 +38,9 @@ entryPoints:
 providers:
   docker:
     exposedByDefault: false
+  file:
+    directory: /dynamic
+    watch: true
 EOF
 else
     sudo tee "$TRAEFIK_DIR/traefik.yml" > /dev/null <<'EOF'
@@ -52,7 +55,17 @@ entryPoints:
 providers:
   docker:
     exposedByDefault: false
+  file:
+    directory: /dynamic
+    watch: true
 EOF
+fi
+
+log_info "Criando diretório $TRAEFIK_DIR/dynamic/..."
+if [ "$EUID" -eq 0 ]; then
+    mkdir -p "$TRAEFIK_DIR/dynamic"
+else
+    sudo mkdir -p "$TRAEFIK_DIR/dynamic"
 fi
 
 log_info "Criando $TRAEFIK_DIR/docker-compose.yml..."
@@ -63,12 +76,15 @@ services:
     image: traefik:v3.0
     container_name: traefik
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/traefik.yml:ro
+      - ./dynamic:/dynamic:ro
     networks:
       - proxy
 
@@ -83,12 +99,15 @@ services:
     image: traefik:v3.0
     container_name: traefik
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
       - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik.yml:/traefik.yml:ro
+      - ./dynamic:/dynamic:ro
     networks:
       - proxy
 

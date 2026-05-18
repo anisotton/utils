@@ -80,6 +80,25 @@ case "$AI_CHOICE" in
         ;;
 esac
 
+# 7. LLM Local (Ollama)
+echo ""
+echo -e "${GREEN}=== LLM Local (Ollama) ===${NC}"
+echo "Deseja instalar um modelo de linguagem local (CPU-only)?"
+echo "  1) Sim — instalar Ollama com modelo de IA"
+echo "  0) Pular"
+echo ""
+echo "Escolha:"
+read -r LLM_CHOICE
+
+case "$LLM_CHOICE" in
+    1)
+        source "$SERVER_SETUP_PATH/install/llm/install.sh"
+        ;;
+    0|*)
+        log_info "Ollama ignorado."
+        ;;
+esac
+
 log_info "=========================================="
 log_info "  Configuração do servidor concluída!"
 log_info "=========================================="
