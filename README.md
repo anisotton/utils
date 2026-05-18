@@ -20,6 +20,14 @@ bash -c "$(wget -qO- https://raw.githubusercontent.com/anisotton/utils/main/boot
 
 Configura Docker, Traefik, dnsmasq, runtimes e ferramentas de IA em Ubuntu Server.
 
+### LLM Local — Ollama (servidor ja configurado)
+
+```bash
+bash -c "$(wget -qO- https://raw.githubusercontent.com/anisotton/utils/main/boot-llm.sh)"
+```
+
+Instala somente o Ollama com modelo local. Requer Docker e Traefik ja em execucao.
+
 Siga as instruções interativas na tela para ambos os modos.
 
 ## Pre-requisitos
@@ -114,6 +122,7 @@ Gera relatorio com status OK/WARN/FAIL e salva em `/tmp/hardware-check-YYYYMMDD.
 utils/
 ├── boot.sh              # Entry point remoto — Ubuntu Dev Setup
 ├── boot-server.sh       # Entry point remoto — Server Setup
+├── boot-llm.sh          # Entry point remoto — LLM Local (Ollama)
 ├── install.sh           # Menu interativo de modulos
 ├── hardware-check.sh    # Verificacao de hardware (standalone)
 ├── README.md

@@ -98,7 +98,8 @@ http:
       rule: "Host(\`ollama.$SERVER_NAME\`)"
       service: ollama
       entryPoints:
-        - web
+        - websecure
+      tls: {}
 
   services:
     ollama:
@@ -115,7 +116,8 @@ http:
       rule: "Host(\`ollama.$SERVER_NAME\`)"
       service: ollama
       entryPoints:
-        - web
+        - websecure
+      tls: {}
 
   services:
     ollama:
