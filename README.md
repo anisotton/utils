@@ -88,6 +88,7 @@ Instalacao automatica para servidores headless Ubuntu 22.04+:
 - **Docker + Traefik** — Docker Engine, Compose e Traefik como reverse proxy com dashboard
 - **Runtimes** — Node.js (via NVM) e PHP com extensoes essenciais
 - **Browser** — Chromium + Playwright para automacao
+- **LLM Local** (selecao interativa) — Ollama com modelos locais (qwen2.5, llama3.2, mistral, phi3.5) expostos via Traefik em `http://ollama.<nome-servidor>`
 - **Ferramentas de IA** (selecao interativa) — Claude Code e/ou Codex CLI
 
 ---
@@ -116,6 +117,7 @@ utils/
 ├── install.sh           # Menu interativo de modulos
 ├── hardware-check.sh    # Verificacao de hardware (standalone)
 ├── README.md
+├── skills/              # Agent skills (Claude Code, Copilot CLI)
 ├── ubuntu-setup/        # Modulo 1: ambiente de desenvolvimento
 │   ├── install.sh
 │   ├── lib/helpers.sh
@@ -133,8 +135,25 @@ utils/
         ├── docker/      # Docker + Traefik
         ├── runtime/     # Node.js + PHP
         ├── browser/     # Chromium + Playwright
+        ├── llm/         # Ollama (opcional)
         └── ai-tools/    # Claude Code + Codex (opcional)
 ```
+
+## Skills
+
+O diretorio `skills/` contem agent skills para Claude Code e Copilot CLI. Os installers de AI tools fazem symlink automatico de `skills/` para `~/.claude/skills` e `~/.copilot/skills` via `install_agent_skills`, entao edicoes no repositorio refletem imediatamente nas ferramentas instaladas.
+
+| Skill | Descricao |
+|-------|-----------|
+| `check-documentation` | Consulta documentacao oficial de Laravel, Livewire, Vue, Tailwind, PHPUnit, Docker e outros |
+| `init-project` | Inicializa projeto com estrutura de workflows e instrucoes do agente |
+| `interface-design` | Design de interfaces — dashboards, paineis admin, apps e ferramentas interativas |
+| `laravel-dusk` | Testes end-to-end com Laravel Dusk (automacao de browser real com Chrome) |
+| `smart-dispatch` | Roteia tarefas para o modelo Claude ideal (opus/sonnet/haiku) conforme complexidade |
+| `workflow-analise-demandas` | Analise tecnica de demandas seguindo o modelo DDP (AS-IS, TO-BE, HOW-TO) |
+| `workflow-issues` | Gerenciamento completo do ciclo de vida de issues de desenvolvimento |
+
+---
 
 ## Execucao Local
 
