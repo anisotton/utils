@@ -81,6 +81,7 @@ Durante a instalacao, voce escolhe quais instalar:
 - **OpenCode** — agente de IA open-source para terminal
 - **Claude Code** — CLI da Anthropic para coding
 - **GitHub Copilot CLI** — assistente de IA do GitHub para terminal
+- **Pi** — agente de coding minimalista, configuravel com Ollama local
 
 ### Customizacoes Desktop
 
