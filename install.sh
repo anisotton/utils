@@ -14,6 +14,7 @@ echo "Módulos disponíveis:"
 echo "  1) Ubuntu Dev Setup  - Ambiente de desenvolvimento completo para Ubuntu"
 echo "  2) Server Setup      - Configuração de servidor Linux (Docker, Traefik, dnsmasq, IA)"
 echo "  3) Hardware Check    - Verificação de integridade de hardware (RAM, SSD, CPU, temperatura)"
+echo "  4) System Check      - Verificação de saúde do SO (disco, serviços, rede, drivers)"
 echo ""
 echo "Escolha o módulo a instalar (ou 0 para sair):"
 read -r MODULE_CHOICE
@@ -27,6 +28,9 @@ case "$MODULE_CHOICE" in
         ;;
     3)
         source "$UTILS_PATH/hardware-check.sh"
+        ;;
+    4)
+        source "$UTILS_PATH/system-check.sh"
         ;;
     0)
         echo "Saindo."
