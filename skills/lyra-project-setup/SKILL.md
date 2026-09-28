@@ -4,20 +4,20 @@ description: Use when creating or reading a codebase project in the Isotton Corp
 compatibility: Detecta o contexto na Etapa 0 — roda DENTRO do Lyra (execução local, sem SSH) ou remoto via `ssh anisotton@lyra`. Requer PAPERCLIP_API_KEY env var ou sessão Paperclip, Docker no Lyra, rede Docker externa `proxy` já criada (Traefik)
 metadata:
   author: isotton-corp
-  version: "2.0"
+  version: "2.1"
 ---
 
 # Lyra Project Setup
 
 ## Objetivo
 
-Criar (ou completar) a estrutura de um projeto de código da Isotton Corp no servidor Lyra, no padrão vigente — validado em `trimasy` e replicado byte-a-byte em `brilhart` (ISO-1261). **Use `/srv/projects/trimasy` como referência canônica sempre que este documento e o disco divergirem** — ele é o último provisionamento validado e revisado pelo Sentinel.
+Criar (ou completar) a estrutura de um projeto de código da Isotton Corp no servidor Lyra, no padrão vigente — cruzado entre `trimasy` e `brilhart` (ISO-1261), que **não são byte-idênticos** (versão do PHP e `conf/30-laravel-setup.sh` divergem por motivos legítimos, ver Etapas 5 e 7) mas seguem a mesma forma estrutural. **Use `/srv/projects/trimasy` como ponto de partida quando este documento e o disco divergirem, mas confira também `/srv/projects/brilhart` antes de assumir que uma divergência é regressão** — pode ser uma correção mais nova que ainda não voltou para o outro projeto.
 
 1. **Objeto de projeto no Paperclip** — criar (`POST`) ou completar um projeto já existente (`PATCH`)
 2. **Pasta no servidor Lyra** — `/srv/projects/{slug}/` (alias `/home/anisotton/projects/{slug}/` — mesmo caminho, `/home/anisotton/projects` é symlink para `/srv/projects`)
 3. **Repositório clonado** — `{slug}/app/` com o código do GitHub
 4. **Workspace primário no Paperclip** — registrado **depois** que `app/` existe (ver armadilha abaixo)
-5. **Arquivos de config** — `Dockerfile`, `docker-compose.yml`, `conf/{10-php.conf,30-laravel-setup.sh,queue-worker.conf}`, `.env`/`.env.example`, `Makefile`, `project.yml`
+5. **Arquivos de config** — `Dockerfile`, `docker-compose.yml`, `docker-compose.override.yml`, `conf/{10-php.conf,30-laravel-setup.sh,queue-worker.conf}`, `.env`/`.env.example`, `Makefile`, `project.yml`
 6. **Rota Traefik** — `/opt/traefik/dynamic/{slug}.yml`, roteando para o container via rede externa `proxy` (sem bind de porta no host)
 
 Todo o tráfego chega pelo Traefik já rodando no Lyra, escutando na rede Docker externa `proxy`. **Nenhum serviço faz bind de porta no host** — nem app, nem db, nem redis. `app_port` no `project.yml` é a porta **interna** do container (`80`), não uma porta do host.
@@ -58,9 +58,9 @@ lyra_exec() {
 
 Rodar o provisionamento **de dentro de uma issue que já vive no projeto-alvo** falha com `workspace_validation_failed` — o runtime tenta validar o workspace primário do projeto no checkout, e esse workspace aponta para `{slug}/app/`, que **ainda não existe** no disco. Foi o que matou a [ISO-1260](/ISO/issues/ISO-1260): o projeto 06 — Brilhart já tinha sido criado no Paperclip (por outra via) com workspace primário apontando para a pasta, e a issue de provisionamento foi aberta dentro desse mesmo projeto.
 
-**Regra:** a issue que executa esta skill deve viver **fora** do projeto-alvo (num projeto de onboarding/infra, ou sem projeto vinculado). Só depois que a Etapa 5 (clone) tiver criado `{slug}/app/` no disco é seguro abrir/rodar issues **dentro** do projeto-alvo — nesse ponto o workspace primário passa a validar normalmente.
+**Regra:** a issue que executa esta skill deve viver **fora** do projeto-alvo (num projeto de onboarding/infra, ou sem projeto vinculado). Só depois que a Etapa 4 (clone) tiver criado `{slug}/app/` no disco é seguro abrir/rodar issues **dentro** do projeto-alvo — nesse ponto o workspace primário passa a validar normalmente.
 
-Se o projeto-alvo já existe e já tem um workspace primário configurado (caminho "projeto já existe", Etapa 2), **confira isso antes de tudo**: `GET /api/projects/{id}/workspaces`. Se o `cwd` retornado ainda não existe no disco, trate como o cenário acima — não execute nada a partir de dentro desse projeto até a Etapa 5 terminar.
+Se o projeto-alvo já existe e já tem um workspace primário configurado (caminho "projeto já existe", Etapa 2), **confira isso antes de tudo**: `GET /api/projects/{id}/workspaces`. Se o `cwd` retornado ainda não existe no disco, trate como o cenário acima — não execute nada a partir de dentro desse projeto até a Etapa 4 (clone) terminar.
 
 ---
 
@@ -144,7 +144,7 @@ curl -sS -o /tmp/lyra-setup-workspaces.json -w "%{http_code}" \
   "${PAPERCLIP_API_BASE}/api/projects/${PAPERCLIP_PROJECT_ID}/workspaces"
 ```
 
-Se já existe um workspace primário com `cwd` que ainda não existe no disco, pule direto para a Etapa 3 sem tentar rodar mais nada *dentro* deste projeto — só volte a interagir com issues dele depois que a Etapa 5 (clone) terminar.
+Se já existe um workspace primário com `cwd` que ainda não existe no disco, pule direto para a Etapa 3 sem tentar rodar mais nada *dentro* deste projeto — só volte a interagir com issues dele depois que a Etapa 4 (clone) terminar.
 
 Toda chamada à API do Paperclip segue o padrão `curl -sS -o <arquivo> -w "%{http_code}"` com checagem explícita do código — nunca `curl -s` sozinho (POLICY §6). `000`/`5xx` é erro explícito.
 
@@ -187,7 +187,7 @@ A partir daqui `$BASE/app` existe no disco — é seguro registrar o workspace (
 
 ## Etapa 5: Criar `conf/` (obrigatório — não existia na v1.0)
 
-Três arquivos, montados pelo `docker-compose.yml` na imagem `webdevops/php-nginx`. Copiar literalmente de `/srv/projects/trimasy/conf/` (idênticos em todos os projetos Lyra) ou gerar com o conteúdo abaixo.
+Três arquivos, montados pelo `docker-compose.yml` na imagem `webdevops/php-nginx`. `10-php.conf` e `queue-worker.conf` são idênticos em todos os projetos Lyra — copiar literalmente de `/srv/projects/trimasy/conf/` ou gerar com o conteúdo abaixo. `30-laravel-setup.sh` **não é** — o `trimasy` (Sep/24, mais recente) e o `brilhart` (Sep/23) têm scripts diferentes porque cada um carrega a correção de um incidente distinto; o template abaixo funde os dois em vez de escolher um.
 
 **`conf/10-php.conf`** — diz ao PHP que está atrás de HTTPS (Traefik termina o TLS):
 
@@ -224,7 +224,7 @@ redirect_stderr=true
 QUEUECONF"
 ```
 
-**`conf/30-laravel-setup.sh`** — corrige ownership de `storage/`/`bootstrap/cache` e roda migrations a cada start do container (roda como root, hook `entrypoint.d` do webdevops, antes do PHP-FPM subir):
+**`conf/30-laravel-setup.sh`** — corrige ownership de `storage/`/`bootstrap/cache`, garante que o nginx consiga ler o docroot montado do host, e roda migrations a cada start do container (roda como root, hook `entrypoint.d` do webdevops, antes do PHP-FPM subir):
 
 ```bash
 lyra_exec "cat > $BASE/conf/30-laravel-setup.sh << 'SETUPSH'
@@ -253,6 +253,22 @@ APP_GROUP=\"\${APP_GROUP:-\${APPLICATION_GROUP:-\$APP_USER}}\"
 mkdir -p /app/storage/logs /app/storage/framework/{cache,sessions,views} /app/bootstrap/cache
 chown -R \"\${APP_USER}:\${APP_GROUP}\" /app/storage /app/bootstrap/cache
 chmod -R ug+rwX /app/storage /app/bootstrap/cache
+
+# Let nginx (its own uid/gid inside the container, no relation to the host-mounted
+# /app owner) read the docroot. Whether this is needed depends on the host directory's
+# permission bits at the time \$BASE was created (umask-dependent — brilhart needed it,
+# trimasy didn't, same skill, same mount pattern). Running it unconditionally is harmless
+# when \"other\" already has read access, and closes the gap when it doesn't: chmod o+rX
+# alone doesn't stick because the host directory's default ACL denies new files (Vite
+# builds, git checkouts) \"other\" access; adding nginx to the mount's owning group does,
+# because it rides the group bits the ACL already grants.
+HOST_GID=\"\$(stat -c %g /app)\"
+HOST_GROUP=\"\$(getent group \"\$HOST_GID\" 2>/dev/null | cut -d: -f1)\" || true
+if [ -z \"\${HOST_GROUP:-}\" ]; then
+  HOST_GROUP=\"hostdevs\"
+  addgroup -g \"\$HOST_GID\" \"\$HOST_GROUP\"
+fi
+addgroup nginx \"\$HOST_GROUP\"
 
 echo \"[laravel-setup] Running migrations...\"
 gosu \"\${APP_USER}\" php /app/artisan migrate --force --no-interaction
@@ -290,17 +306,22 @@ Se o Caminho B (Etapa 2) já encontrou um workspace primário existente com `cwd
 
 ## Etapa 7: Criar Dockerfile
 
-Na **raiz do projeto** (não em `app/`), `context: .`:
+Na **raiz do projeto** (não em `app/`), `context: .`. **A tag `webdevops/php-nginx` não é uma constante fixa da skill — segue o `require.php` do `composer.json` clonado na Etapa 4.** Os 5 projetos vivos no Lyra provam isso: `trimasy` pede `^8.5` e usa `8.5-alpine`; `brilhart` e `spomsy` pedem `^8.4` e usam `8.4-alpine`; `smasy` pede `^8.3`. Rodar sempre depois do clone:
 
 ```bash
-lyra_exec "cat > $BASE/Dockerfile << 'DOCKERFILE'
-FROM webdevops/php-nginx:8.5-alpine
+PHP_CONSTRAINT="$(lyra_exec "grep -m1 '\"php\"' $BASE/app/composer.json" | grep -oE '8\.[0-9]+')"
+PHP_TAG="${PHP_CONSTRAINT:-8.4}-alpine"
+
+lyra_exec "cat > $BASE/Dockerfile << DOCKERFILE
+FROM webdevops/php-nginx:$PHP_TAG
 
 # Browser stack for Laravel Dusk end-to-end tests.
 # DuskTestCase.php expects /usr/bin/chromedriver (provided by chromium-chromedriver).
 RUN apk add --no-cache chromium chromium-chromedriver
 DOCKERFILE"
 ```
+
+Se o `composer.json` ainda não tiver `require.php` (repo `app/` vazio, primeiro provisionamento antes do código chegar), perguntar a versão ao usuário em vez de assumir — não fixar `8.4` ou `8.5` "porque foi o que apareceu na maioria dos projetos".
 
 Se o projeto não usa Dusk (`stack=node`, ou Laravel sem testes de browser), omitir o `RUN apk add` e usar a imagem base direto — mas isso é excepcional; todos os projetos Laravel do Lyra hoje incluem Dusk.
 
@@ -397,7 +418,55 @@ COMPOSE"
 
 ---
 
-## Etapa 9: Criar `.env` e `.env.example`
+## Etapa 9: Criar docker-compose.override.yml
+
+**Não existia na v1.0 e não estava nesta reescrita até a revisão do Sentinel apontar a ausência.** Limites de memória + rotação de log, aplicados em todos os 5 projetos vivos do Lyra desde 26/jul/2026 (via `lyra-hardening-20260726.sh`, script de hardening fora do escopo desta skill) — sem ele, um projeto novo sobe sem os limites que todo projeto real hoje tem, e um container com leak de memória pode derrubar o host.
+
+```bash
+lyra_exec "cat > $BASE/docker-compose.override.yml << OVERRIDE
+# Limites de memória + rotação de log (padrão de 26/jul/2026, replicado do trimasy)
+# Aplicados ao vivo via docker update; este arquivo efetiva na próxima recriação (docker compose up -d)
+services:
+  $SLUG-app:
+    mem_limit: 1g
+    memswap_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: \"20m\"
+        max-file: \"3\"
+  $SLUG-db:
+    mem_limit: 1g
+    memswap_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: \"20m\"
+        max-file: \"3\"
+  $SLUG-redis:
+    mem_limit: 256m
+    memswap_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: \"20m\"
+        max-file: \"3\"
+  $SLUG-chrome:
+    mem_limit: 2g
+    memswap_limit: 3g
+    logging:
+      driver: json-file
+      options:
+        max-size: \"20m\"
+        max-file: \"3\"
+OVERRIDE"
+```
+
+Remover o bloco do serviço correspondente para cada serviço que a Etapa 8 tiver omitido (`$SLUG-db` se `database=none`, `$SLUG-redis` se `database=none`, `$SLUG-chrome` se o projeto não roda Dusk — é exatamente o caso do `isotton`, o único dos 5 sem bloco `-chrome` no override).
+
+---
+
+## Etapa 10: Criar `.env` e `.env.example`
 
 ```bash
 lyra_exec "cat > $BASE/.env.example << ENV
@@ -434,7 +503,7 @@ Gerar `APP_KEY` e trocar as senhas (`DB_PASSWORD`, `DB_ROOT_PASSWORD`) antes de 
 
 ---
 
-## Etapa 10: Criar Makefile
+## Etapa 11: Criar Makefile
 
 **Não existe target `deploy` no padrão atual** — a v1.0 tinha um `deploy` com `git pull origin main` fixo, mas nenhum dos 5 projetos vivos no Lyra usa isso hoje (deploy/atualização de código é feito por fora, projeto a projeto). O Makefile real é minimalista:
 
@@ -479,7 +548,7 @@ Para `stack=node`, substituir os targets `artisan`/`migrate`/`fresh`/`seed`/`com
 
 ---
 
-## Etapa 11: Criar project.yml
+## Etapa 12: Criar project.yml
 
 ```bash
 lyra_exec "cat > $BASE/project.yml << YAML
@@ -524,7 +593,7 @@ YAML"
 
 ---
 
-## Etapa 12: Criar config do Traefik
+## Etapa 13: Criar config do Traefik
 
 Sem `entryPoints: web` e sem bind de porta — só `websecure` + `tls: {}`, backend apontando para o container pelo nome (rede `proxy`), não para `127.0.0.1`:
 
@@ -550,7 +619,7 @@ O Traefik recarrega automaticamente (`watch: true`). O container `$SLUG-app` só
 
 ---
 
-## Etapa 13: Subir containers e verificar
+## Etapa 14: Subir containers e verificar
 
 ```bash
 lyra_exec "cd $BASE && docker compose up -d"
@@ -573,6 +642,7 @@ Arquivos criados:
   [OK] project.yml
   [OK] Dockerfile
   [OK] docker-compose.yml
+  [OK] docker-compose.override.yml
   [OK] conf/{10-php.conf,30-laravel-setup.sh,queue-worker.conf}
   [OK] .env / .env.example
   [OK] Makefile
@@ -618,4 +688,10 @@ O `project.yml` é a fonte de verdade de todos os metadados do projeto — inclu
 
 ## Referência canônica e validação cruzada
 
-Este documento foi escrito a partir de `/srv/projects/trimasy` (último provisionamento validado pelo Sentinel) e conferido contra `/srv/projects/brilhart` (ISO-1261), que saiu **idêntico em forma** — mesmo `Dockerfile`, mesmo `docker-compose.yml` (troque só o slug), mesmo `Makefile`, mesmo layout de `conf/`. Divergir desse padrão sem registrar o porquê no `project.yml` ou numa issue é sinal de que este `SKILL.md` ficou defasado de novo — reabra uma issue como a ISO-1262.
+Este documento foi escrito a partir de `/srv/projects/trimasy` e conferido contra `/srv/projects/brilhart` (ISO-1261) arquivo por arquivo — não presuma paridade sem checar; a checagem para esta v2.0 encontrou três divergências reais entre os dois, todas incorporadas ao documento em vez de silenciadas:
+
+- **Versão do PHP no Dockerfile**: `trimasy` usa `8.5-alpine`, `brilhart`/`spomsy` usam `8.4-alpine`, `smasy` pede `8.3`. Não é drift — é o `require.php` de cada `composer.json` (Etapa 7). Uma skill que fixasse um valor único estaria sempre errada para algum projeto.
+- **`conf/30-laravel-setup.sh`**: o `trimasy` (mais recente) tem a correção de ownership do ISO-1335/1336; o `brilhart` tem uma correção de leitura do docroot pelo nginx que o `trimasy` não tem. A Etapa 5 funde as duas em vez de copiar só uma — do contrário, o próximo projeto herdaria a lacuna de qualquer um dos dois lados.
+- **`docker-compose.override.yml`**: ausente da v1.0 e da primeira versão desta reescrita; presente e idêntico nos 5 projetos vivos (Etapa 9).
+
+Mesmo `Makefile` e mesmo layout de `docker-compose.yml`/`conf/` (troque só o slug) continuam valendo como paridade real, confirmada nos dois projetos. Encontrar uma nova divergência sem explicação registrada no `project.yml` ou numa issue é sinal de que este `SKILL.md` ficou defasado de novo — reabra uma issue como a ISO-1262, e verifique no disco antes de descrever qualquer coisa como "idêntica".
